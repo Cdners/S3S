@@ -10,7 +10,7 @@ test('uploads expose cleanup separately from resuming transfers', () => {
     assert.deepEqual(taskActions({...upload,state,cancelRequested:true}), ['cleanup'])
   }
   assert.deepEqual(taskActions({...upload,state:'running'}), ['pause','cancel'])
-  assert.deepEqual(taskActions({...upload,state:'running',cancelRequested:true}), [])
+  assert.deepEqual(taskActions({...upload,state:'running',cancelRequested:true}), ['cleanup'])
   for (const state of ['completed','canceled','unsupported']) {
     assert.deepEqual(taskActions({...upload,state}), [])
     assert.deepEqual(taskActions({...upload,state,cancelRequested:true}), [])

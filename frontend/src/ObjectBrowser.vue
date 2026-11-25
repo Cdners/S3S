@@ -25,7 +25,7 @@ const bucketError = ref<WorkspaceError>()
 const objectError = ref<WorkspaceError>()
 const downloadError = ref<WorkspaceError>()
 const prompting = ref(false)
-const enqueued = ref<'download' | 'upload'>()
+const transferNotice = ref<'objects.enqueued' | 'upload.enqueued' | 'upload.stopRequested'>()
 const uploadDialog = ref(false)
 let scope = 0
 
@@ -35,7 +35,7 @@ function resetObjectView() {
   objects.reset()
   objectError.value = undefined
   downloadError.value = undefined
-  enqueued.value = undefined
+  transferNotice.value = undefined
   prompting.value = false
 }
 function reset() {
@@ -89,11 +89,11 @@ async function download(key:string) {
   if (!conn || prompting.value) return
   const generation = scope
   prompting.value = true
-  enqueued.value = undefined
+  transferNotice.value = undefined
   downloadError.value = undefined
   try {
     const id = await startDownload(conn, bucket.value, key, t('native.saveTitle'))
-    if (generation === scope) enqueued.value = id ? 'download' : undefined
+    if (generation === scope) transferNotice.value = id ? 'objects.enqueued' : undefined
   } catch (error) {
     if (generation === scope) downloadError.value = workspaceError(error)
   } finally {
@@ -138,7 +138,7 @@ async function download(key:string) {
           <button class="icon-button" :aria-label="t('objects.refresh')" @click="open(bucket,prefix)"><RefreshCw/></button></div></div>
         <ErrorNotice v-if="objectError" :error="objectError"/>
         <ErrorNotice v-if="downloadError" :error="downloadError"/>
-        <p v-if="enqueued" role="status" class="notice">{{ t(enqueued === 'upload' ? 'upload.enqueued' : 'objects.enqueued') }} <button class="inline-button" @click="emit('tasks')">{{ t('nav.tasks') }}</button></p>
+        <p v-if="transferNotice" role="status" class="notice">{{ t(transferNotice) }} <button class="inline-button" @click="emit('tasks')">{{ t('nav.tasks') }}</button></p>
         <div class="table-scroll"><table><thead><tr><th>{{ t('objects.key') }}</th><th>{{ t('objects.size') }}</th><th>{{ t('connections.actions') }}</th></tr></thead>
           <tbody><tr v-for="item in objects.entries" :key="item.kind+':'+item.name">
             <td><button v-if="item.kind === 'prefix'" class="inline-button object-key" @click="open(bucket,item.name)"><Folder/>{{ item.name }}</button>
@@ -150,7 +150,8 @@ async function download(key:string) {
           <span v-else-if="objects.loaded && !objects.entries.length">{{ t('objects.noObjects') }}</span>
           <button v-if="!objects.loading && (objects.nextToken || objectError)" class="inline-button" @click="moreObjects">{{ t(objectError ? 'action.retry' : 'objects.moreObjects') }}</button></div>
         <UploadDialog v-if="uploadDialog && profile" :profile="profile" :bucket="bucket" :prefix="prefix"
-          @close="uploadDialog = false" @enqueued="uploadDialog = false; enqueued = 'upload'"/>
+          @close="uploadDialog = false" @enqueued="uploadDialog = false; transferNotice = 'upload.enqueued'"
+          @cancel-preparation="uploadDialog = false; transferNotice = 'upload.stopRequested'"/>
       </section>
     </div>
   </section>

@@ -152,7 +152,13 @@ func (w *Workspace) CancelUpload(ctx context.Context, id string) response[bool] 
 			return failure[bool](nil, "error.appClosing")
 		}
 	}
-	t, err := w.store.Task(ctx, id)
+	w.mu.Lock()
+	if other, busy := w.active[id]; busy && other.cleanup && !w.closing {
+		w.mu.Unlock()
+		return response[bool]{Data: true}
+	}
+	t, err := w.idleTaskLocked(ctx, id, core.Upload)
+	w.mu.Unlock()
 	if err != nil {
 		return failure[bool](err, core.Storage)
 	}

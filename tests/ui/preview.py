@@ -8,6 +8,8 @@ from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
 
+from upload_preparation import verify_upload_preparation
+
 
 FRONTEND = Path(__file__).resolve().parents[2] / 'frontend'
 
@@ -78,13 +80,14 @@ def main():
         try:
             browser = playwright.chromium.launch(executable_path=executable)
             try:
-                verify(browser.new_page(viewport={'width': 1200, 'height': 800}),
-                       f'http://127.0.0.1:{server.server_port}')
+                address = f'http://127.0.0.1:{server.server_port}'
+                verify(browser.new_page(viewport={'width': 1200, 'height': 800}), address)
+                verify_upload_preparation(browser.new_page(), address, messages('en-US'))
             finally:
                 browser.close()
         finally:
             server.shutdown()
-    print('PASS preview navigation, language import, fallback and persistence')
+    print('PASS preview navigation, language import, fallback, persistence and upload preparation cancellation')
 
 
 if __name__ == '__main__':

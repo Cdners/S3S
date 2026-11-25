@@ -178,5 +178,7 @@
   "error.uploadVerify": "The upload result has not been verified. Retry to check the remote object.",
   "error.uploadParts": "The remote parts and local checkpoints disagree. The upload stopped. Inspect the task before retrying or aborting it.",
   "error.uploadCleanup": "The multipart session is still visible after aborting. Retry cleanup to verify its removal.",
-  "upload.preparing": "Waiting for a file selection or preparing the upload…"
+  "upload.preparing": "Waiting for a file selection or preparing the upload…",
+  "upload.stopPreparation": "Stop preparation",
+  "upload.stopRequested": "Requested to stop preparation. If a task has already entered the queue, manage it in Task center."
 }

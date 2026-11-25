@@ -8,7 +8,9 @@ export function taskActions(task: Pick<Task,'direction' | 'state' | 'resumable' 
   if (!task.resumable || !['upload', 'download'].includes(task.direction)) return []
   const idle = ['queued','paused','failed'].includes(task.state)
   if (!idle && task.state !== 'running') return []
-  if (task.direction === 'upload' && task.cancelRequested) return idle ? ['cleanup'] : []
+  // Retrying an active cleanup is idempotent, including when a worker has
+  // finished but its final SQLite state update was interrupted.
+  if (task.direction === 'upload' && task.cancelRequested) return ['cleanup']
   const action = task.state === 'running' ? 'pause' : 'resume'
   return task.direction === 'upload' ? [action, 'cancel'] : [action]
 }

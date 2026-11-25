@@ -168,3 +168,65 @@ func TestWorkspaceOwnsTransfersUntilShutdown(t *testing.T) {
 		t.Fatal("old task accepted a different connection origin")
 	}
 }
+
+// A failed terminal SQLite write leaves a running manifest after its worker has
+// exited. Explicit controls must recover only that idle task, without requiring
+// a second process to acquire the workspace and run startup recovery.
+func TestControlInterruptedWorkersWithoutRestart(t *testing.T) {
+	ctx := context.Background()
+	w := openWorkspaceAt(t.TempDir())
+	defer w.close()
+	c := core.Connection{ID: "id", Name: "local", Provider: core.AWS}
+	if err := w.store.SaveConnection(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+
+	download, err := w.engine.Enqueue(ctx, c, &waitingSource{}, "bucket", "key", filepath.Join(t.TempDir(), "download"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.store.ClaimDownload(ctx, download.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r := w.PauseDownload(ctx, download.ID); r.Error != nil {
+		t.Fatal(r.Error)
+	}
+	d, err := w.store.Task(ctx, download.ID)
+	if err != nil || d.State != core.Paused {
+		t.Fatal("stale download could not be paused")
+	}
+
+	path := filepath.Join(t.TempDir(), "source")
+	if err := os.WriteFile(path, []byte(t.Name()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	upload, err := w.engine.EnqueueUpload(ctx, c, "bucket", "key", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.store.ClaimUpload(ctx, upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r := w.PauseUpload(ctx, upload.ID); r.Error != nil {
+		t.Fatal(r.Error)
+	}
+	// The user's retry may itself be handling a stale cleanup worker. Its
+	// durable cancellation intent and aborting phase must survive the CAS.
+	if err := w.store.RequestUploadCancel(ctx, upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.store.ClaimUpload(ctx, upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.store.MarkUploadPhase(ctx, upload.ID, "ready", "aborting"); err != nil {
+		t.Fatal(err)
+	}
+	if r := w.CancelUpload(ctx, upload.ID); r.Error != nil {
+		t.Fatal(r.Error)
+	}
+	joinWorker(t, w, upload.ID)
+	u, err := w.store.Task(ctx, upload.ID)
+	if err != nil || u.State != core.Canceled || u.UploadPhase != "aborting" {
+		t.Fatal("stale upload cleanup could not finish")
+	}
+}

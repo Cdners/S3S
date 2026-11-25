@@ -34,13 +34,20 @@ export function localizedError(detail: ErrorDetail): WorkspaceError {
 export function workspaceError(err: unknown): WorkspaceError {
   return err instanceof WorkspaceError ? err : new WorkspaceError('error.bridge')
 }
-async function call<T>(method: string, ...args: unknown[]): Promise<T> {
+async function request<T>(method: string, args: unknown[], signal?: AbortSignal): Promise<T> {
   if (!isDesktop) throw new WorkspaceError('error.preview')
   const { Call } = await import('@wailsio/runtime')
-  const result: Result<T> = await Call.ByName('main.Workspace.' + method, ...args)
+  // The runtime's CancellablePromise sends a CancelCall to Go. Bind it before
+  // awaiting, while the Wails call ID and cancellation callback are available.
+  if (signal?.aborted) throw signal.reason
+  const pending = Call.ByName('main.Workspace.' + method, ...args)
+  const result: Result<T> = await (signal ? pending.cancelOn(signal) : pending)
   if (result.error) throw localizedError(result.error)
   if (result.data === null) throw new WorkspaceError('error.storage')
   return result.data
+}
+function call<T>(method: string, ...args: unknown[]): Promise<T> {
+  return request<T>(method, args)
 }
 export async function loadProfiles() {
   profiles.value = await call<Profile[]>('Connections')
@@ -70,8 +77,8 @@ export const pauseDownload = (id: string) => call<boolean>('PauseDownload', id)
 export const resumeDownload = (id: string) => call<boolean>('ResumeDownload', id)
 export const forgetCredentials = (profile: Profile) => call<boolean>('ForgetCredentials', profile)
 
-export const startUpload = (profile: Profile, bucket: string, key: string, title: string) =>
-  call<string>('StartUpload', profile, bucket, key, title)
+export const startUpload = (profile: Profile, bucket: string, key: string, title: string, signal: AbortSignal) =>
+  request<string>('StartUpload', [profile, bucket, key, title], signal)
 export const pauseUpload = (id: string) => call<boolean>('PauseUpload', id)
 export const resumeUpload = (id: string) => call<boolean>('ResumeUpload', id)
 export const cancelUpload = (id: string) => call<boolean>('CancelUpload', id)
