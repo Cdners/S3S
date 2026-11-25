@@ -1,6 +1,6 @@
 # 构建产物与发布
 
-M0 通过 GitHub Actions 提供按提交区分的开发构建。面向 `main` 的普通 PR，以及推送到 `main` 或 `feat/**` 的提交会运行验证与构建。M0 不创建版本标签或 GitHub Release。
+GitHub Actions 提供按提交区分的开发构建。所有目标分支的普通 PR，以及推送到 `main` 或 `feat/**` 的提交会运行验证与构建。版本标签和 GitHub Release 由后续受控发布流程创建。
 
 ## 下载与核对
 

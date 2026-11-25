@@ -1,7 +1,6 @@
 name: Desktop
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main, "feat/**"]
 permissions:
@@ -56,6 +55,12 @@ jobs:
           gcc -dumpmachine | grep -E '^x86_64-w64-mingw32'
       - name: Check UI, language resources and Go
         run: bash scripts/check.sh
+      - name: Verify paginated listing and restartable downloads against isolated S3
+        if: runner.os == 'Linux'
+        run: |
+          export S3S_INTEGRATION_BINARY="$RUNNER_TEMP/s3s-integration"
+          go test -mod=readonly -tags=s3integration -c -o "$S3S_INTEGRATION_BINARY" ./tests/integration
+          bash tests/integration/run.sh
       - name: Build native desktop archive
         run: bash scripts/build.sh
       - name: Upload desktop build

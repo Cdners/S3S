@@ -121,3 +121,20 @@ fieldset small { margin-left:4px; color:var(--muted); font-weight:400; }
   .tools > label { flex:1 1 160px; }
   .tools select { max-width:none; width:100%; }
 }
+
+.browser-content { padding: 20px 22px; }
+.browse-actions,.bucket-controls,.bucket-links,.location { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.browse-actions { justify-content:space-between; }
+.bucket-form { display:grid; gap:7px; margin:18px 0; font-size:14px; }
+.bucket-controls input { flex:1 1 180px; min-width:0; max-width:450px; }
+.bucket-results { display:grid; gap:10px; padding:15px 0; border-top:1px solid var(--line); font-size:13px; }
+.location { justify-content:space-between; padding:16px 0; }
+.location > div:first-child { min-width:0; overflow-wrap:anywhere; }
+.remote-list { border-top:1px solid var(--line); }
+.page-status { display:flex; gap:12px; align-items:center; font-size:13px; padding:12px 0 0; }
+.cloud-error { overflow-wrap:anywhere; }
+.scope { overflow-wrap:anywhere; color:var(--muted); font-size:13px; }
+td .cloud-error { margin:6px 0; min-width:120px; font-size:12px; }
+.credentials-footer { align-items:center; flex-wrap:wrap; }
+.credentials-footer > .inline-button { margin-inline-end:auto; color:#a33330; }
+.remove-prompt { padding:20px 22px; line-height:1.6; }

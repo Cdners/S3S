@@ -41,9 +41,9 @@ async function save() {
         <select id="profile-provider" v-model="provider"><option v-for="p in providers" :key="p" :value="p">{{ t(`provider.${p}`) }}</option></select>
         <label for="profile-region">{{ t('connections.region') }} <small>{{ t('connections.optional') }}</small></label>
         <input id="profile-region" v-model="region" maxlength="128" spellcheck="false">
-        <label for="profile-endpoint">{{ t('connections.endpoint') }} <small>{{ t('connections.optional') }}</small></label>
+        <label for="profile-endpoint">{{ t('connections.endpoint') }} <small v-if="provider !== 'r2'">{{ t('connections.optional') }}</small></label>
         <input id="profile-endpoint" v-model="endpoint" type="url" maxlength="2048" spellcheck="false" aria-describedby="endpoint-hint">
-        <p id="endpoint-hint" class="hint">{{ t('connections.endpointHint') }}</p>
+        <p id="endpoint-hint" class="hint">{{ t(provider === 'aws' ? 'connections.awsHint' : provider === 'r2' ? 'connections.r2Hint' : 'connections.endpointHint') }}</p>
       </fieldset>
       <p v-if="failure" role="alert" class="alert">{{ t(failure.key, failure.detail?.params) }}</p>
       <footer class="dialog-footer"><button type="button" class="secondary" :disabled="busy" @click="emit('close')">{{ t('action.cancel') }}</button>

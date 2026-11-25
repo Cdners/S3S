@@ -31,3 +31,20 @@ test('malformed packs, built-in replacement and placeholder corruption are rejec
     assert.throws(() => parsePack(candidate, en))
   }
 })
+
+test('every Go backend error key has a built-in translation', async () => {
+  const { readdir, readFile } = await import('node:fs/promises')
+  const root = new URL('../../', import.meta.url)
+  const internal = await readdir(new URL('internal/', root), {recursive:true})
+  const files = [...await readdir(root), ...internal.map(path => 'internal/' + path)]
+    .filter(path => path.endsWith('.go') && !path.endsWith('_test.go'))
+  const keys = new Set()
+  for (const file of files) {
+    const code = await readFile(new URL(file, root), 'utf8')
+    for (const match of code.matchAll(/"(error\.[a-zA-Z][a-zA-Z0-9.]*)"/g)) keys.add(match[1])
+  }
+  assert.ok(keys.has('error.storage'), 'expected to find Go error codes')
+  for (const key of keys) {
+    assert.ok(Object.hasOwn(en, key) && Object.hasOwn(zh, key), key)
+  }
+})

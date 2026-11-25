@@ -1,20 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
-  Activity, ArrowDownUp, ArrowRight, Box, CircleAlert, FileUp,
-  FolderClosed, FolderOpen, HardDrive, Info, Languages, Layers3, Pencil,
+  Activity, ArrowDownUp, CircleAlert, FileUp,
+  FolderClosed, HardDrive, Info, KeyRound, Languages, Layers3, Pencil,
   Plus, Search, Server, Settings2, SlidersHorizontal, Waypoints
 } from '@lucide/vue'
 import ProfileDialog from './ProfileDialog.vue'
+import CredentialsDialog from './CredentialsDialog.vue'
+import ObjectBrowser from './ObjectBrowser.vue'
+import ErrorNotice from './ErrorNotice.vue'
 import { importLanguage, languages, locale, setLanguage, t, type MessageKey } from './i18n'
-import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, type Profile, type Provider, type WorkspaceError } from './workspace'
+import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, supportsCloud, pauseDownload, resumeDownload, localizedError, type Profile, type Provider, type WorkspaceError } from './workspace'
 
 type Page = 'connections' | 'objects' | 'tasks' | 'settings'
 const nav = [{ id:'connections', icon:Waypoints }, { id:'objects', icon:FolderClosed }, { id:'tasks', icon:ArrowDownUp }] as const
 const page = ref<Page>('connections')
 const query = ref('')
 const filter = ref<Provider | ''>('')
-const selectedId = ref('')
+const credentialProfile = ref<Profile>()
+const pendingTask = ref('')
+const fetchedTasks = ref(false)
+const taskFailure = ref<WorkspaceError>()
 const editing = ref<Profile>()
 const showDialog = ref(false)
 const importing = ref(false)
@@ -34,15 +40,36 @@ async function refresh(kind: 'connections' | 'tasks') {
   if (loading.value[kind]) return
   failures.value[kind] = undefined
   loading.value[kind] = true
-  try { await (kind === 'connections' ? loadProfiles() : loadTasks()) }
+  try {
+    if (kind === 'connections') await loadProfiles()
+    else { await loadTasks(); fetchedTasks.value = true }
+  }
   catch (error) { failures.value[kind] = workspaceError(error) }
   finally { loading.value[kind] = false }
 }
+async function taskAction(id:string, action:'pause' | 'resume') {
+  if (pendingTask.value) return
+  pendingTask.value = id
+  taskFailure.value = undefined
+  try {
+    await (action === 'pause' ? pauseDownload(id) : resumeDownload(id))
+    await refresh('tasks')
+  } catch (error) { taskFailure.value = workspaceError(error) }
+  finally { pendingTask.value = '' }
+}
+let poll: ReturnType<typeof setInterval>
 function navigate(p: Page) {
   page.value = p
   if (isDesktop && p !== 'settings') void refresh(dataPage.value)
 }
-onMounted(() => { if (isDesktop) void refresh('connections') })
+onMounted(() => {
+  if (!isDesktop) return
+  void refresh('connections')
+  poll = setInterval(() => {
+    if (page.value === 'tasks' && !failures.value.tasks && !pendingTask.value && !document.hidden) void refresh('tasks')
+  }, 1800)
+})
+onUnmounted(() => clearInterval(poll))
 function edit(profile?: Profile) { editing.value = profile; showDialog.value = true }
 async function importFile(event: Event) {
   const input = event.target as HTMLInputElement
@@ -91,7 +118,8 @@ async function importFile(event: Event) {
             <th>{{ t('connections.name') }}</th><th>{{ t('connections.provider') }}</th><th>{{ t('connections.region') }}</th><th>{{ t('connections.endpoint') }}</th><th><span class="sr-only">{{ t('connections.actions') }}</span></th>
           </tr></thead><tbody v-if="!failure"><tr v-for="p in visible" :key="p.id">
             <td class="strong">{{ p.name }}</td><td>{{ t(`provider.${p.provider}`) }}</td><td>{{ p.region || t('connections.default') }}</td><td>{{ p.endpoint || t('connections.default') }}</td>
-            <td><button class="icon-button" :disabled="loading.connections" :aria-label="t('connections.actionEdit', {name:p.name})" @click="edit(p)"><Pencil /></button></td>
+            <td><button class="icon-button" :disabled="loading.connections" :aria-label="t(supportsCloud(p) ? 'connections.actionCredentials' : 'credentials.forgetNamed', {name:p.name})" @click="credentialProfile = p"><KeyRound/></button>
+              <button class="icon-button" :disabled="loading.connections" :aria-label="t('connections.actionEdit', {name:p.name})" @click="edit(p)"><Pencil /></button></td>
           </tr></tbody></table></div>
           <div v-if="failure || loading.connections || !visible.length" class="empty">
             <div class="empty-icon"><Waypoints /></div>
@@ -103,23 +131,24 @@ async function importFile(event: Event) {
         <p class="footnote"><Info />{{ t('connections.noCloud') }}</p>
       </template>
       <template v-else-if="page === 'objects'">
-        <section class="panel">
-          <header class="panel-head"><div class="panel-label"><FolderOpen /><h2>{{ t('objects.title') }}</h2></div>
-            <select v-model="selectedId" :aria-label="t('objects.connection')" :disabled="!profiles.length || !!failure || !isDesktop"><option value="">{{ t('objects.select') }}</option>
-              <option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}</option></select>
-          </header>
-          <table><thead><tr><th>{{ t('objects.key') }}</th><th>{{ t('objects.size') }}</th><th>{{ t('objects.modified') }}</th></tr></thead></table>
-          <div class="empty"><div class="empty-icon"><Box /></div><h3>{{ t('objects.empty') }}</h3><p>{{ t('objects.emptyText') }}</p>
-          <button class="inline-button" @click="navigate('connections')">{{ t('objects.manage') }}<ArrowRight /></button></div>
-        </section>
+        <ObjectBrowser :unavailable="!!failure" @manage="navigate('connections')" @tasks="navigate('tasks')" @credentials="credentialProfile = $event"/>
       </template>
       <template v-else-if="page === 'tasks'">
         <section class="panel">
           <header class="panel-head"><div class="panel-label"><Activity /><h2>{{ t('tasks.title') }}</h2></div></header>
-          <div class="table-scroll"><table><thead><tr><th>{{ t('tasks.object') }}</th><th>{{ t('tasks.direction') }}</th><th>{{ t('tasks.state') }}</th></tr></thead>
-            <tbody v-if="!failure"><tr v-for="task in tasks" :key="task.id"><td class="object-key">{{ task.bucket }}/{{ task.objectKey }}</td><td>{{ t(task.direction === 'upload' ? 'tasks.upload' : task.direction === 'download' ? 'tasks.download' : 'tasks.unknown') }}</td><td>{{ t(states[task.state] ?? 'tasks.unknown') }}</td></tr></tbody></table></div>
-          <div v-if="failure || loading.tasks || !tasks.length" class="empty"><div class="empty-icon"><ArrowDownUp /></div>
-            <h3>{{ t(loading.tasks ? 'common.loading' : isDesktop && !failure ? 'tasks.empty' : 'tasks.title') }}</h3><p>{{ t('tasks.emptyText') }}</p></div>
+          <ErrorNotice v-if="taskFailure" :error="taskFailure"/>
+          <div class="table-scroll"><table><thead><tr><th>{{ t('tasks.object') }}</th><th>{{ t('tasks.direction') }}</th><th>{{ t('tasks.state') }}</th><th>{{ t('tasks.progress') }}</th><th>{{ t('connections.actions') }}</th></tr></thead>
+            <tbody v-if="!failure">
+              <tr v-for="task in tasks" :key="task.id"><td class="object-key">{{ task.bucket }}/{{ task.objectKey }}</td>
+                <td>{{ t(task.direction === 'upload' ? 'tasks.upload' : task.direction === 'download' ? 'tasks.download' : 'tasks.unknown') }}</td>
+                <td>{{ t(states[task.state] ?? 'tasks.unknown') }}<ErrorNotice v-if="task.lastError" :error="localizedError(task.lastError)"/></td>
+                <td>{{ t('tasks.bytes', {done:(task.transferredBytes ?? 0).toLocaleString(locale), total:task.size.toLocaleString(locale)}) }}</td>
+                <td v-if="task.direction === 'download' && task.resumable === true">
+                  <button v-if="task.state === 'running'" class="inline-button" :disabled="!!pendingTask" @click="taskAction(task.id,'pause')">{{ t('tasks.pause') }}</button>
+                  <button v-else-if="['queued','paused','failed'].includes(task.state)" class="inline-button" :disabled="!!pendingTask" @click="taskAction(task.id,'resume')">{{ t('tasks.resume') }}</button></td><td v-else></td>
+              </tr></tbody></table></div>
+          <div v-if="failure || !tasks.length" class="empty"><div class="empty-icon"><ArrowDownUp /></div>
+            <h3>{{ t(!isDesktop || failure ? 'tasks.title' : fetchedTasks ? 'tasks.empty' : 'common.loading') }}</h3><p>{{ t('tasks.emptyText') }}</p></div>
         </section>
       </template>
       <template v-else>
@@ -134,6 +163,7 @@ async function importFile(event: Event) {
         </section>
       </template>
     </main>
+    <CredentialsDialog v-if="credentialProfile" :profile="credentialProfile" @close="credentialProfile = undefined" @saved="credentialProfile = undefined"/>
     <ProfileDialog v-if="showDialog" :profile="editing" @close="showDialog = false"/>
   </div>
 </template>

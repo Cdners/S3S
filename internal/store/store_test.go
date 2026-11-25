@@ -88,6 +88,7 @@ func TestRecoveryRecordsSurviveReopen(t *testing.T) {
 	tasks, err := s.Tasks(ctx)
 	requireOK(t, err)
 	task.State, task.UploadID = core.Running, "session"
+	task.TransferredBytes = 512
 	if !reflect.DeepEqual(tasks, []core.Task{task}) {
 		t.Fatalf("tasks = %#v", tasks)
 	}
@@ -119,13 +120,13 @@ func TestMigrationIsAtomicAndRejectsNewerSchema(t *testing.T) {
 	if n != 0 {
 		t.Fatal("failed migration advanced version")
 	}
-	_, err = db.Exec("PRAGMA user_version = 2")
+	_, err = db.Exec("PRAGMA user_version = 99")
 	requireOK(t, err)
 	if _, err := Open(path); err == nil {
 		t.Fatal("accepted newer schema")
 	}
 	requireOK(t, db.QueryRow("PRAGMA user_version").Scan(&n))
-	if n != 2 {
+	if n != 99 {
 		t.Fatal("changed newer schema")
 	}
 }
@@ -165,4 +166,23 @@ func TestCheckpointAfterProcessExit(t *testing.T) {
 	if !reflect.DeepEqual(parts, []core.Part{{Number: 1, Offset: 0, Size: 2, Checksum: "abc"}}) {
 		t.Fatalf("lost checkpoint: %#v", parts)
 	}
+}
+
+func TestMigrationFromM0PreservesUnboundTask(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v1.db")
+	old, err := sql.Open("sqlite3", path)
+	requireOK(t, err)
+	_, err = old.Exec(schema1 + `PRAGMA user_version=1;
+        INSERT INTO connections VALUES ('c','origin','aws','','');
+        INSERT INTO tasks VALUES ('legacy','c','download','b','a//../b','output',1,'running','');`)
+	requireOK(t, err)
+	requireOK(t, old.Close())
+	db := openDB(t, path)
+	requireOK(t, db.RecoverDownloads(t.Context()))
+	task, err := db.Task(t.Context(), "legacy")
+	requireOK(t, err)
+	if task.Resumable || task.State != core.Running || task.ObjectKey != "a//../b" {
+		t.Fatalf("legacy task changed: %#v", task)
+	}
+	requireCode(t, db.ClaimDownload(t.Context(), "legacy"), core.Conflict)
 }

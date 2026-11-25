@@ -53,7 +53,12 @@ type Capabilities struct {
 }
 
 // CapabilitiesFor reports only operations backed by a working adapter.
-func CapabilitiesFor(Provider) Capabilities { return Capabilities{} }
+func CapabilitiesFor(provider Provider) Capabilities {
+	if provider == AWS || provider == R2 {
+		return Capabilities{ListBuckets: true, ListObjects: true, Download: true}
+	}
+	return Capabilities{}
+}
 
 type SpeedMode string
 
@@ -113,7 +118,10 @@ type Task struct {
 	Size      int64     `json:"size"`
 	State     TaskState `json:"state"`
 	// UploadID is opaque provider recovery metadata and stays in the engine.
-	UploadID string `json:"-"`
+	UploadID         string `json:"-"`
+	TransferredBytes int64  `json:"transferredBytes"`
+	LastError        *Error `json:"lastError,omitempty"`
+	Resumable        bool   `json:"resumable"`
 }
 
 func (t Task) ValidateNew() error {

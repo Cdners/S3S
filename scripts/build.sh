@@ -11,6 +11,10 @@ revision=${GITHUB_SHA:-$(git rev-parse HEAD)}
 test -s frontend/dist/index.html
 mkdir -p dist
 archive="s3s-$platform-$arch-$revision"
+# Local iterations can contain uncommitted source. Keep the clean SHA archive intact.
+if [[ -z "${GITHUB_SHA:-}" && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  archive="$archive-dirty"
+fi
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 flags=(-mod=readonly -tags production -trimpath)

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,6 +19,9 @@ import (
 
 //go:embed migrations/001.sql
 var schema1 string
+
+//go:embed migrations/002.sql
+var schema2 string
 
 type Store struct{ db *sql.DB }
 
@@ -60,18 +64,19 @@ func migrate(db *sql.DB) error {
 	if err := tx.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	switch version {
-	case 0:
-		if _, err := tx.Exec(schema1); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("PRAGMA user_version = 1"); err != nil {
-			return err
-		}
-	case 1:
-		// Already current.
-	default:
+	migrations := []string{schema1, schema2}
+	if version < 0 || version > len(migrations) {
 		return errors.New("unsupported S3S database schema version")
+	}
+	for index, script := range migrations {
+		if version <= index {
+			if _, err := tx.Exec(script); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", index+1)); err != nil {
+				return err
+			}
+		}
 	}
 	return tx.Commit()
 }
@@ -131,16 +136,16 @@ func (s *Store) CreateTask(ctx context.Context, t core.Task) error {
 }
 
 func (s *Store) Tasks(ctx context.Context) ([]core.Task, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,connection_id,direction,bucket,object_key,local_path,size,state,upload_id FROM tasks ORDER BY rowid`)
+	rows, err := s.db.QueryContext(ctx, taskSelect+" ORDER BY t.rowid")
 	if err != nil {
 		return nil, dbError(err)
 	}
 	defer rows.Close()
 	list := []core.Task{}
 	for rows.Next() {
-		var t core.Task
-		if err := rows.Scan(&t.ID, &t.ConnectionID, &t.Direction, &t.Bucket, &t.ObjectKey, &t.LocalPath, &t.Size, &t.State, &t.UploadID); err != nil {
-			return nil, dbError(err)
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
 		}
 		list = append(list, t)
 	}
