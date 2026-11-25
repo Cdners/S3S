@@ -14,9 +14,16 @@ archive="s3s-$platform-$arch-$revision"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 flags=(-mod=readonly -tags production -trimpath)
+verify_binary() {
+  local info
+  info=$(go version -m "$1")
+  grep -Fq "GOOS=$platform" <<< "$info"
+  grep -Fq "GOARCH=$arch" <<< "$info"
+}
 case "$platform" in
   windows)
     go build "${flags[@]}" -ldflags="-H windowsgui" -o "$stage/S3S.exe" .
+    verify_binary "$stage/S3S.exe"
     python -m zipfile -c "dist/$archive.zip" "$stage/S3S.exe"
     ;;
   darwin)
@@ -25,12 +32,14 @@ case "$platform" in
     cp scripts/Info.plist "$bundle/Contents/"
     plutil -lint "$bundle/Contents/Info.plist"
     MACOSX_DEPLOYMENT_TARGET=15.0 go build "${flags[@]}" -o "$bundle/Contents/MacOS/S3S" .
+    verify_binary "$bundle/Contents/MacOS/S3S"
     codesign --force --sign - "$bundle"
     codesign --verify --strict "$bundle"
     tar -czf "dist/$archive.tar.gz" -C "$stage" S3S.app
     ;;
   linux)
     go build "${flags[@]}" -o "$stage/S3S" .
+    verify_binary "$stage/S3S"
     tar -czf "dist/$archive.tar.gz" -C "$stage" S3S
     ;;
   *) echo "Unsupported platform: $platform" >&2; exit 1 ;;

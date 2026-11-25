@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Layers3, X } from '@lucide/vue'
-import { t, type MessageKey } from './i18n'
-import { errorKey, providers, saveProfile, type Profile, type Provider } from './workspace'
+import { t } from './i18n'
+import { workspaceError, providers, saveProfile, type Profile, type Provider, type WorkspaceError } from './workspace'
 
 const props = defineProps<{ profile?: Profile }>()
 const emit = defineEmits<{ close: [] }>()
@@ -12,7 +12,7 @@ const provider = ref<Provider>(props.profile?.provider ?? 'aws')
 const region = ref(props.profile?.region ?? '')
 const endpoint = ref(props.profile?.endpoint ?? '')
 const busy = ref(false)
-const failure = ref<MessageKey>()
+const failure = ref<WorkspaceError>()
 const valid = computed(() => name.value.trim().length > 0)
 onMounted(() => dialog.value?.showModal())
 async function save() {
@@ -22,7 +22,7 @@ async function save() {
   try {
     await saveProfile({id:props.profile?.id, name:name.value.trim(), provider:provider.value, region:region.value.trim(), endpoint:endpoint.value.trim()})
     emit('close')
-  } catch (error) { failure.value = errorKey(error) }
+  } catch (error) { failure.value = workspaceError(error) }
   finally { busy.value = false }
 }
 </script>
@@ -34,7 +34,7 @@ async function save() {
       <h2 id="profile-title">{{ t(profile ? 'connections.edit' : 'connections.add') }}</h2>
       <button type="button" class="icon-button" :aria-label="t('action.close')" :disabled="busy" @click="emit('close')"><X /></button>
     </header>
-    <form @submit.prevent="save">
+    <form novalidate @submit.prevent="save">
       <fieldset :disabled="busy">
         <label for="profile-name">{{ t('connections.name') }}</label><input id="profile-name" v-model="name" maxlength="120" required autofocus>
         <label for="profile-provider">{{ t('connections.provider') }}</label>
@@ -45,7 +45,7 @@ async function save() {
         <input id="profile-endpoint" v-model="endpoint" type="url" maxlength="2048" spellcheck="false" aria-describedby="endpoint-hint">
         <p id="endpoint-hint" class="hint">{{ t('connections.endpointHint') }}</p>
       </fieldset>
-      <p v-if="failure" role="alert" class="alert">{{ t(failure) }}</p>
+      <p v-if="failure" role="alert" class="alert">{{ t(failure.key, failure.detail?.params) }}</p>
       <footer class="dialog-footer"><button type="button" class="secondary" :disabled="busy" @click="emit('close')">{{ t('action.cancel') }}</button>
         <button type="submit" class="primary" :disabled="busy || !valid">{{ t(busy ? 'connections.saving' : 'connections.save') }}</button></footer>
     </form>

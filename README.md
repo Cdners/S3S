@@ -15,7 +15,19 @@ bash scripts/cloud-linux.sh run bash scripts/check.sh go
 bash scripts/cloud-linux.sh run bash scripts/build.sh
 ```
 
+需要 Wails CLI 时，在同一云端容器执行 `bash scripts/cloud-linux.sh run go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0`，再执行 `bash scripts/cloud-linux.sh run /tools/gopath/bin/wails3 version`。实测输出为 `v3.1.0`，与 Go 模块和前端 runtime 一致。常规构建直接使用固定的 Go 模块。
+
 前端检查通过锁文件安装依赖，校验语言资源并做 TypeScript 检查和生产构建。Go 检查验证模块、运行 vet 和实际测试。最终归档位于 `dist/`，包含平台、架构与 Git commit。先构建前端，再编译 Go，确保 WebView 资源嵌入可执行文件。
+
+使用云端预装的 Python Playwright 和 Chromium 运行 `python3 tests/ui/preview.py`，可复验浏览器预览中的双语导航、语言包导入、错误提示和回退。
+
+在同一云机上，可从打包产物启动实际 Linux 桌面程序并自动操作窗口。测试使用独立的临时用户数据，依次打开页面、保存连接、切换语言，结束进程后重新启动，并核对保存结果。
+
+```bash
+stage=$(mktemp -d)
+tar -xzf "dist/s3s-linux-amd64-$(git rev-parse HEAD).tar.gz" -C "$stage"
+bash tests/ui/linux-container.sh "$stage/S3S"
+```
 
 连接元数据及任务状态保存在系统的用户配置目录下的 `S3S/workspace.sqlite3`。M0 只收集连接的名称、类型、区域和端点。界面中的语言选择、导入的语言包保存在本机 WebView 用户数据中。
 

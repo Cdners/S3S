@@ -13,6 +13,8 @@ bash scripts/cloud-linux.sh run bash scripts/check.sh go
 bash scripts/cloud-linux.sh run bash scripts/build.sh
 ```
 
+浏览器验证使用云端已安装的 Playwright 1.62.0 和 Chromium，运行 `python3 tests/ui/preview.py`。执行 `bash tests/ui/linux-container.sh /path/to/S3S` 会用独立的临时配置，通过 AT-SPI 驱动 Xvfb 上的真实 Linux WebView，并重启程序检查本地记录。Docker 测试容器的限制及已执行结果见 [STATUS.md](STATUS.md)。
+
 具有完整原生工具链的 Actions runner 依次运行 `bash scripts/check.sh` 和 `bash scripts/build.sh`。检查脚本及 CI 使用的参数见 [脚本目录](../scripts/)。分别检查以下行为：
 
 - **核心与 SQLite**。使用真实临时数据库，从空文件迁移并重复打开，保存任务和分片，再关闭连接并重新打开，按身份核对内容。用带 `a//../b %25/文` 的 Key 检查往返结果。验证允许与禁止的状态迁移，以及失败操作不会留下部分状态。

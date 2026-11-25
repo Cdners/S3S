@@ -26,8 +26,8 @@ export const tasks = ref<Task[]>([])
 export class WorkspaceError extends Error {
   constructor(readonly key: MessageKey, readonly detail?: ErrorDetail) { super(key) }
 }
-export function errorKey(err: unknown): MessageKey {
-  return err instanceof WorkspaceError ? err.key : 'error.bridge'
+export function workspaceError(err: unknown): WorkspaceError {
+  return err instanceof WorkspaceError ? err : new WorkspaceError('error.bridge')
 }
 async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   if (!isDesktop) throw new WorkspaceError('error.preview')

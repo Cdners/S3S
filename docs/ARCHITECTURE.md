@@ -21,7 +21,7 @@ Wails 3 在窗口中加载由 Vite 编译、Go `embed` 打包的静态文件。V
 | Wails Go 模块、CLI、前端 runtime | 3.1.0 | Go 使用 `github.com/wailsapp/wails/v3`；CLI 入口为相同模块的 `cmd/wails3`；前端使用 `@wailsio/runtime`。打包脚本直接构建 Go 入口，无需 Wails v2 命令。 |
 | SQLite 驱动 | `github.com/mattn/go-sqlite3` v1.14.53 | 使用驱动内嵌的 SQLite 编译；版本与校验和见 `go.mod` 和 `go.sum`。 |
 | Node.js、npm | 24.22.3、11.19.1 | CI 使用精确的 Node.js 版本；前端声明 npm，使用 `npm ci` 安装锁文件指定的依赖。 |
-| Vue、TypeScript | 3.5.46、6.0.3 | 页面与类型检查。 |
+| Vue、TypeScript | 3.5.46、6.0.3 | Vue 页面与类型检查。单独试用 TypeScript 7.0.2 时，vue-tsc 3.3.14 加载 TypeScript 的 lib/tsc 导出失败，因此固定兼容的 6.0.3。 |
 | Vite、plugin-vue、vue-tsc | 8.3.8、6.0.11、3.3.14 | `frontend/package.json` 固定直接版本；传递依赖及完整性摘要保存在 `frontend/package-lock.json`。 |
 
 版本可在 [Go 发布记录](https://go.dev/dl/)、[Wails v3 模块元数据](https://proxy.golang.org/github.com/wailsapp/wails/v3/@v/v3.1.0.mod)、[npm runtime 元数据](https://registry.npmjs.org/@wailsio/runtime/3.1.0) 核对。Wails v3.1.0 模块声明最低 Go 1.26.0。Linux 构建基于 GTK 4 与 WebKitGTK 6.0，Windows 使用原生编译器环境和 WebView2，macOS 使用 Xcode 工具链与系统 WebKit。具体安装与检查入口见 [README.md](../README.md)。

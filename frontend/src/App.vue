@@ -7,7 +7,7 @@ import {
 } from '@lucide/vue'
 import ProfileDialog from './ProfileDialog.vue'
 import { importLanguage, languages, locale, setLanguage, t, type MessageKey } from './i18n'
-import { errorKey, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, type Profile, type Provider } from './workspace'
+import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, type Profile, type Provider, type WorkspaceError } from './workspace'
 
 type Page = 'connections' | 'objects' | 'tasks' | 'settings'
 const nav = [{ id:'connections', icon:Waypoints }, { id:'objects', icon:FolderClosed }, { id:'tasks', icon:ArrowDownUp }] as const
@@ -20,7 +20,7 @@ const showDialog = ref(false)
 const importing = ref(false)
 const importAlert = ref<MessageKey>()
 const fileInput = ref<HTMLInputElement>()
-const failures = ref<Partial<Record<'connections' | 'tasks', MessageKey>>>({})
+const failures = ref<Partial<Record<'connections' | 'tasks', WorkspaceError>>>({})
 const loading = ref({ connections:false, tasks:false })
 const visible = computed(() => profiles.value.filter(p =>
   (!filter.value || filter.value === p.provider) && p.name.toLowerCase().includes(query.value.trim().toLowerCase())))
@@ -35,7 +35,7 @@ async function refresh(kind: 'connections' | 'tasks') {
   failures.value[kind] = undefined
   loading.value[kind] = true
   try { await (kind === 'connections' ? loadProfiles() : loadTasks()) }
-  catch (error) { failures.value[kind] = errorKey(error) }
+  catch (error) { failures.value[kind] = workspaceError(error) }
   finally { loading.value[kind] = false }
 }
 function navigate(p: Page) {
@@ -72,10 +72,10 @@ async function importFile(event: Event) {
     <main>
       <div class="workspace"><HardDrive />{{ t(isDesktop ? 'workspace.local' : 'workspace.preview') }}</div>
       <header class="page-head"><div><h1>{{ t(`nav.${page}`) }}</h1><p>{{ t(`${page}.description`) }}</p></div>
-        <button v-if="page === 'connections'" class="primary" :disabled="!isDesktop || !!failure" @click="edit()"><Plus />{{ t('connections.add') }}</button>
+        <button v-if="page === 'connections'" class="primary" :disabled="!isDesktop || !!failure || loading.connections" @click="edit()"><Plus />{{ t('connections.add') }}</button>
       </header>
       <div v-if="failure || (!isDesktop && page !== 'settings')" :role="failure ? 'alert' : 'status'" class="notice">
-        <Info /><span>{{ t(failure ?? 'error.preview') }}</span>
+        <Info /><span>{{ t(failure?.key ?? 'error.preview', failure?.detail?.params) }}</span>
         <button v-if="failure" class="inline-button" @click="refresh(dataPage)">{{ t('action.retry') }}</button>
       </div>
       <template v-if="page === 'connections'">
@@ -91,7 +91,7 @@ async function importFile(event: Event) {
             <th>{{ t('connections.name') }}</th><th>{{ t('connections.provider') }}</th><th>{{ t('connections.region') }}</th><th>{{ t('connections.endpoint') }}</th><th><span class="sr-only">{{ t('connections.actions') }}</span></th>
           </tr></thead><tbody v-if="!failure"><tr v-for="p in visible" :key="p.id">
             <td class="strong">{{ p.name }}</td><td>{{ t(`provider.${p.provider}`) }}</td><td>{{ p.region || t('connections.default') }}</td><td>{{ p.endpoint || t('connections.default') }}</td>
-            <td><button class="icon-button" :aria-label="t('connections.actionEdit', {name:p.name})" @click="edit(p)"><Pencil /></button></td>
+            <td><button class="icon-button" :disabled="loading.connections" :aria-label="t('connections.actionEdit', {name:p.name})" @click="edit(p)"><Pencil /></button></td>
           </tr></tbody></table></div>
           <div v-if="failure || loading.connections || !visible.length" class="empty">
             <div class="empty-icon"><Waypoints /></div>
