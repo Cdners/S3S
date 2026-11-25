@@ -1,0 +1,19 @@
+# Installed dependencies, generated web assets, and native builds
+node_modules/
+frontend/dist/
+dist/
+bin/
+build-output/
+*.tsbuildinfo
+coverage.out
+
+# Local developer and application state
+.DS_Store
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-shm
+*.db-wal
