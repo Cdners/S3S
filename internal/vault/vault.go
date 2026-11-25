@@ -19,8 +19,16 @@ type Credentials struct {
 	SessionToken    string `json:"sessionToken"`
 }
 
-func (c Credentials) valid() bool {
-	return strings.TrimSpace(c.AccessKeyID) != "" && strings.TrimSpace(c.SecretAccessKey) != ""
+// Empty distinguishes leaving write-only fields blank from a partial replacement.
+func (c Credentials) Empty() bool {
+	return strings.TrimSpace(c.AccessKeyID) == "" && strings.TrimSpace(c.SecretAccessKey) == "" && strings.TrimSpace(c.SessionToken) == ""
+}
+
+func (c Credentials) Validate() error {
+	if strings.TrimSpace(c.AccessKeyID) == "" || strings.TrimSpace(c.SecretAccessKey) == "" {
+		return core.NewError("error.invalidCredentials")
+	}
+	return nil
 }
 
 type Scope struct {
@@ -44,8 +52,8 @@ type entry struct {
 type Vault struct{}
 
 func (Vault) Save(c core.Connection, credentials Credentials) error {
-	if !credentials.valid() {
-		return core.NewError("error.invalidCredentials")
+	if err := credentials.Validate(); err != nil {
+		return err
 	}
 	payload, err := json.Marshal(entry{ScopeOf(c), credentials})
 	if err != nil {
@@ -70,7 +78,7 @@ func (Vault) Load(c core.Connection) (Credentials, error) {
 		return Credentials{}, core.NewError("error.keyringUnavailable")
 	}
 	var item entry
-	if json.Unmarshal([]byte(payload), &item) != nil || !item.Credentials.valid() {
+	if json.Unmarshal([]byte(payload), &item) != nil || item.Credentials.Validate() != nil {
 		return Credentials{}, core.NewError("error.keyringUnavailable")
 	}
 	if item.Scope != ScopeOf(c) {

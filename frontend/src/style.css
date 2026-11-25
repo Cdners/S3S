@@ -149,3 +149,7 @@ td .cloud-error { margin:6px 0; min-width:120px; font-size:12px; }
 .task-actions { display:flex; flex-wrap:wrap; gap:8px 12px; }
 .task-actions .destructive { color:#9d2c30; }
 .danger { background:#a62e31; color:white; border:1px solid #982629; border-radius:7px; padding:10px 15px; font-weight:600; }
+
+.account-edit { white-space: nowrap; }
+.account-edit svg { width: 15px; height: 15px; }
+.account-capability { display: block; margin-top: 3px; color: var(--muted); }

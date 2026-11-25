@@ -1,5 +1,18 @@
 # S3S 开发状态
 
+## 账号填写示例、凭据与语言切换
+
+`feat/account-setup-and-language` 从 `bada023` 继续开发。从「账号管理 → 添加账号」或某一行的「编辑账号」即可在同一窗口输入公开配置、AK/SK 和临时会话令牌。五种服务的填写示例可在没有账号时查看。TOS 北京示例能将区域和服务地址填入表单，保存前可以修改。Windows、macOS、Linux 继续使用各自的系统密钥库。侧栏和设置页都能直接选择「简体中文」或「English」。可选的第三方语言包在设置页的「更多语言」内管理。[带截图的入门指南](../README.md#第一次添加存储账号)
+
+| 验证 | 实际结果 |
+| --- | --- |
+| 前端与 Go | 前端锁文件安装、11 项 Node 测试、类型检查、生产构建通过。Go 模块校验、vet 和 58 项顶层测试通过。桌面桥接、密钥库与 S3 适配器通过断网竞态检测。 |
+| Chromium | 查看各服务填写示例，在已打开的 TOS 示例上切换语言，验证选项及区域保留。另用隔离接口模拟密钥写入失败，验证重试沿用同一账号 ID。在小窗口中检查账号保存按钮和空白凭据。 |
+| Linux 原生桌面 | 使用真实 Wails 窗口从同一表单添加 AWS 和 TOS 账号。核对本轮生成的测试密钥确实进入 GNOME Secret Service，编辑不回显原密钥。重开后使用 AWS 配置连接隔离服务，切换中英文后保持当前桶。扫描应用 SQLite 及 WebKit 持久化数据，未检出本轮测试密钥。TOS 在对象页显示云操作待接入。 |
+| 尚未执行 | 真实厂商租户验收、Windows 和 macOS 的原生窗口操作及系统密钥库交互。OSS、TOS、通用 S3 的桶浏览、上传和下载仍待接入。 |
+
+当前云实例访问 GitHub GraphQL 接口返回 `Forbidden`。按提交核对的原生构建及下载项见[账号改进分支的 Actions 记录](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Faccount-setup-and-language)。[与 main 的差异及 PR 入口](https://github.com/Cdners/S3S/compare/main...feat/account-setup-and-language?expand=1)
+
 ## M1 第二轮 · AWS/R2 可恢复上传
 
 本轮分支 `feat/m1-resumable-upload` 基于上一轮浏览和下载提交 `aaf6fc2`。

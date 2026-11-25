@@ -109,7 +109,7 @@ async function download(key:string) {
         <option value="">{{ t('objects.select') }}</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}</option></select></header>
     <div v-if="!profile || !cloud || unavailable" class="empty">
       <div class="empty-icon"><Box/></div><h3>{{ t(profile && !cloud ? 'objects.unsupported' : 'objects.empty') }}</h3>
-      <p>{{ t('objects.emptyText') }}</p><button class="inline-button" @click="emit('manage')">{{ t('objects.manage') }}<ArrowRight/></button>
+      <p>{{ profile && !cloud ? t('objects.localOnly', {provider:t(`provider.${profile.provider}`)}) : t('objects.emptyText') }}</p><button class="inline-button" @click="emit('manage')">{{ t('objects.manage') }}<ArrowRight/></button>
     </div>
     <div v-else class="browser-content">
       <div class="browse-actions">

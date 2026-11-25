@@ -27,6 +27,11 @@ bash scripts/cloud-linux.sh run bash scripts/build.sh
 
 上传恢复验证要记录实际重传的分片编号、远端会话是否复用、完成后读回的文件摘要，以及取消后会话的消失。只看到本地进度达到 100% 不足以证明远端提交成功。
 
+## 账号配置与语言切换
+
+- `python3 tests/ui/preview.py` 在 Chromium 打开生产前端。检查五家服务的示例、TOS 区域和地址填入、侧栏的中英切换、可选语言包及回退。隔离的桌面接口测试强制返回“配置已保存、密钥写入失败”，检查二次提交沿用同一账号 ID。
+- 在 Linux 云机解出当次归档后，运行 `bash tests/integration/run.sh /path/to/S3S`。从「添加账号」输入测试环境临时生成的密钥，核对 Secret Service 条目，重启后用隔离端点浏览和传输。TOS 验证到本地账号与密钥存储。检查 SQLite 和 WebKit 持久化目录中是否出现测试密钥。不要把凭据写入命令行、断言输出或截图。
+
 ## 隔离的 S3 协议集成测试
 
 准备云端 Linux 环境后，在仓库根目录运行 `bash tests/integration/run.sh`。脚本创建独立的 Docker 网络命名空间，让 AWS 与 R2 形式的测试端点只解析到本轮的本地 HTTPS 服务。签名请求走工程中的 SDK，使用临时测试身份、临时 CA 和 Moto 测试数据。可将解包得到的 Linux 桌面程序路径作为第一个参数传入，以覆盖原生 WebView 与凭据存储流程。详细执行记录见 [STATUS.md](STATUS.md)。此验证与厂商托管服务的验收分别记录。

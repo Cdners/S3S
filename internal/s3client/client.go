@@ -40,7 +40,7 @@ var (
 		return t
 	}()
 	regionName   = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
-	r2Host       = regexp.MustCompile(`^[a-f0-9]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
+	r2Host       = regexp.MustCompile(`^[a-f0-9]{32}(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$`)
 	bucketName   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,253}$`)
 	providerCode = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
 	requestID    = regexp.MustCompile(`^[a-zA-Z0-9._/+=-]{1,128}$`)

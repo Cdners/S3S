@@ -8,6 +8,7 @@ from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
 
+from account_form import verify_account_form
 from upload_preparation import verify_upload_preparation
 
 
@@ -41,8 +42,22 @@ def verify(page, address):
     expect(page.locator('html')).to_have_attribute('lang', 'zh-CN')
     for route in ('connections', 'objects', 'tasks', 'settings'):
         open_page(page, chinese, route)
-    page.locator('#language').select_option('en-US')
+    # Change the language in-place while reading a specific provider's guide.
+    open_page(page, chinese, 'connections')
+    guide = page.locator('.account-examples')
+    guide.locator('summary').click()
+    guide.get_by_role('combobox').select_option('tos')
+    expect(guide.get_by_text(chinese['account.guide.tos.keys'], exact=True)).to_be_visible()
+    page.locator('aside').get_by_role('radio', name=chinese['language.nativeName']).press('ArrowRight')
+    expect(page.get_by_role('heading', level=1)).to_have_text(english['nav.connections'])
     expect(page.locator('html')).to_have_attribute('lang', 'en-US')
+    expect(guide.get_by_role('combobox')).to_have_value('tos')
+    expect(guide.get_by_text('cn-beijing', exact=True)).to_be_visible()
+    expect(guide.get_by_text('https://tos-cn-beijing.volces.com', exact=True)).to_be_visible()
+    for provider in ('aws', 'r2', 'oss', 'tos', 's3-compatible'):
+        guide.get_by_role('combobox').select_option(provider)
+        for field in ('origin', 'keys', 'next'):
+            expect(guide.get_by_text(english[f'account.guide.{provider}.{field}'], exact=True)).to_be_visible()
     open_page(page, english, 'connections')
     expect(page.get_by_role('button', name=english['connections.add'])).to_be_disabled()
     expect(page.get_by_text(english['error.preview'])).to_be_visible()
@@ -54,9 +69,11 @@ def verify(page, address):
     expect(page.locator('html')).to_have_attribute('lang', 'en-US')
     open_page(page, english, 'settings')
 
+    expect(page.get_by_role('button', name=english['settings.import'])).to_be_hidden()
+    page.locator('.language-packs summary').click()
     import_pack(page, {'connections.count': 'profils'})
     expect(page.get_by_role('status')).to_have_text(english['settings.importError'])
-    expect(page.locator('#language')).to_have_value('en-US')
+    expect(page.locator('main').get_by_role('radio', name=english['language.nativeName'])).to_be_checked()
     import_pack(page, {'nav.settings': 'Réglages'})
     expect(page.get_by_role('heading', level=1)).to_have_text('Réglages')
     expect(page.get_by_text(english['settings.appearance'], exact=True)).to_be_visible()
@@ -82,12 +99,14 @@ def main():
             try:
                 address = f'http://127.0.0.1:{server.server_port}'
                 verify(browser.new_page(viewport={'width': 1200, 'height': 800}), address)
+                verify_account_form(browser.new_page(viewport={'width': 760, 'height': 560}), address, messages('zh-CN'))
                 verify_upload_preparation(browser.new_page(), address, messages('en-US'))
             finally:
                 browser.close()
         finally:
             server.shutdown()
-    print('PASS preview navigation, language import, fallback, persistence and upload preparation cancellation')
+    print('PASS five account guides, keyboard language switch with context, language import, fallback, '
+          'persistence, account keyring retry, preview navigation and upload preparation cancellation')
 
 
 if __name__ == '__main__':

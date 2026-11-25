@@ -155,6 +155,10 @@ func TestEndpointAndCredentials(t *testing.T) {
 	}{
 		{core.AWS, "", "", true}, {core.AWS, "https://s3.amazonaws.com", "us-east-1", true}, {core.AWS, "https://s3.cn-north-1.amazonaws.com.cn", "cn-north-1", true},
 		{core.R2, "https://" + account + ".eu.r2.cloudflarestorage.com", "auto", true},
+		{core.R2, "https://" + account + ".us.r2.cloudflarestorage.com", "auto", true},
+		{core.R2, "https://" + account + ".fedramp.r2.cloudflarestorage.com", "auto", true},
+		{core.R2, "https://" + account + ".unknown.r2.cloudflarestorage.com", "auto", false},
+		{core.R2, "https://" + account + ".us.r2.cloudflarestorage.com.example.org", "auto", false},
 		{core.R2, "", "", false}, {core.R2, "http://" + account + ".r2.cloudflarestorage.com", "", false}, {core.R2, "https://example.com", "", false},
 		{core.AWS, "https://example.com", "us-east-1", false}, {core.AWS, "", "../../untrusted", false}, {core.OSS, "", "", false},
 	} {

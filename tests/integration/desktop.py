@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -27,6 +28,53 @@ def enter(value):
 def select_end(label):
     lookup(label, 'combo box').queryComponent().grabFocus()
     keys('End', 'Return')
+
+
+def blank_secret(catalog, label):
+    entry = lookup(catalog[label], 'password text')
+    # WebKitGTK exposes an empty field's placeholder as its AT-SPI text.
+    placeholder = next((attr.removeprefix('placeholder-text:') for attr in entry.getAttributes()
+                        if attr.startswith('placeholder-text:')), '')
+    if entry.queryText().getText(0, -1) not in ('', placeholder):
+        raise AssertionError('Opening the account form revealed a populated credential field')
+    return entry
+
+
+def fill_keys(catalog, credentials):
+    for label, field in [('credentials.access', 'accessKeyId'), ('credentials.secret', 'secretAccessKey')]:
+        entry = blank_secret(catalog, label)
+        entry.queryComponent().grabFocus()
+        enter(credentials[field])
+
+
+def check_keyring(root, name, expected):
+    database = (root / 'XDG_CONFIG_HOME' / 'S3S' / 'workspace.sqlite3').as_uri()
+    with sqlite3.connect(database + '?mode=ro', uri=True) as db:
+        ids = db.execute('SELECT id FROM connections WHERE name = ?', (name,)).fetchall()
+    if len(ids) != 1:
+        raise AssertionError('Expected one saved account')
+    # Read only the fixture-created item. Capture the result in memory so
+    # credentials are never written to test output, logs or screenshots.
+    value = subprocess.check_output(['secret-tool', 'lookup', 'service', 'io.github.cdners.S3S',
+                                     'username', ids[0][0]])
+    secret = json.loads(value)['Credentials']
+    if any(secret.get(key) != expected[key] for key in expected):
+        raise AssertionError('The scoped OS keyring item differs from the submitted fixture')
+
+
+def check_storage(root, credential_sets):
+    # SQLite can encode a text cell as UTF-8 or UTF-16. Inspect the application
+    # database, sidecars and the entire persistent WebKit website-data profile.
+    db_files = list((root / 'XDG_CONFIG_HOME' / 'S3S').glob('workspace.sqlite3*'))
+    web = root / 'XDG_DATA_HOME' / 'io.github.cdners.s3s' / 'storage'
+    if not db_files or not list(web.rglob('localstorage.sqlite3')):
+        raise AssertionError('Missing application or WebKit storage in this test profile')
+    needles = [value.encode(encoding) for credentials in credential_sets for value in credentials.values()
+               for encoding in ('utf-8', 'utf-16-le', 'utf-16-be')]
+    for path in db_files + [file for file in web.rglob('*') if file.is_file()]:
+        data = path.read_bytes()
+        if any(needle in data for needle in needles):
+            raise AssertionError('Fixture credentials appeared outside the OS keyring')
 
 
 def wait_completed_upload(en, object_name):
@@ -61,21 +109,22 @@ def verify():
                        stdout=subprocess.DEVNULL, check=True)
         with desktop(FIXTURE / 'S3S', root):
             lookup(zh['connections.empty'], 'heading')
-            visit(zh, 'settings')
-            select_end(zh['settings.language'])
-            visit(en, 'connections')
+            press(en['language.nativeName'], 'radio button')
+            lookup(en['nav.connections'], 'heading')
             press(en['connections.add'])
             lookup(en['connections.add'], 'heading')
             enter(name)
+            fill_keys(en, credentials)
             press(en['connections.save'])
             lookup(name, 'table cell')
-            press(en['connections.actionCredentials'].format(name=name))
-            lookup(en['credentials.title'].format(name=name), 'heading')
-            enter(credentials['accessKeyId'])
-            keys('Tab')
-            enter(credentials['secretAccessKey'])
-            press(en['credentials.save'])
-            # Wait for the modal to close, then verify a real request before restart.
+            check_keyring(root, name, credentials)
+            press(en['connections.actionEdit'].format(name=name))
+            lookup(en['connections.edit'], 'heading')
+            for label in ('credentials.access', 'credentials.secret', 'credentials.token'):
+                blank_secret(en, label)
+            # Save the existing account with empty secret fields. The same-scoped
+            # keyring item must remain usable by the real backend after restart.
+            press(en['connections.save'])
             visit(en, 'objects')
             select_end(en['objects.connection'])
             press(en['objects.loadBuckets'])
@@ -87,6 +136,12 @@ def verify():
             press(en['objects.loadBuckets'])
             press(bucket)
             lookup('ui-proof.txt', 'table cell')
+            press(zh['language.nativeName'], 'radio button')
+            lookup(zh['nav.objects'], 'heading')
+            lookup('ui-proof.txt', 'table cell')
+            lookup(bucket, 'heading')
+            press(en['language.nativeName'], 'radio button')
+            lookup(en['nav.objects'], 'heading')
             press(en['objects.download'])
             lookup(en['native.saveTitle'])
             destination = root / 'exact-bytes.txt'
@@ -114,11 +169,30 @@ def verify():
             press('Open')
             visit(en, 'tasks')
             wait_completed_upload(en, bucket + '/' + upload_key)
-        for path in (root / 'XDG_CONFIG_HOME' / 'S3S').glob('workspace.sqlite3*'):
-            data = path.read_bytes()
-            if any(word.encode() in data for word in credentials.values()):
-                raise AssertionError('A fixture credential appeared in SQLite')
-    print('PASS native credentials, OS keyring after restart, buckets/objects, native Open/Save dialogs, download bytes and completed upload row')
+            visit(en, 'connections')
+            press(en['connections.add'])
+            lookup(en['connections.add'], 'heading')
+            tos_name = 'TOS setup fixture'
+            enter(tos_name)
+            lookup(en['connections.provider'], 'combo box').queryComponent().grabFocus()
+            keys('Home', 'Down', 'Down', 'Down', 'Return')
+            lookup(en['account.planned'])
+            press(en['account.fillExample'])
+            for label, expected in [('connections.region', 'cn-beijing'),
+                                    ('connections.endpoint', 'https://tos-cn-beijing.volces.com')]:
+                if lookup(en[label], 'entry').queryText().getText(0, -1) != expected:
+                    raise AssertionError('The TOS example filled an unexpected account scope')
+            tos_keys = {'accessKeyId': secrets.token_hex(10).upper(), 'secretAccessKey': secrets.token_hex(32)}
+            fill_keys(en, tos_keys)
+            press(en['connections.save'])
+            lookup(tos_name, 'table cell')
+            check_keyring(root, tos_name, tos_keys)
+            visit(en, 'objects')
+            select_end(en['objects.connection'])
+            lookup(en['objects.unsupported'], 'heading')
+        check_storage(root, (credentials, tos_keys))
+    print('PASS single-form AWS/TOS accounts, protected edits and OS keyring, restart, storage scan, '
+          'live language switch in open bucket, native file pickers, verified transfers and pending TOS adapter')
 
 
 if __name__ == '__main__':

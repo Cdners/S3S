@@ -38,8 +38,8 @@ def lookup(name, role=None):
     raise AssertionError(f'Missing {role or "accessible object"}: {name}')
 
 
-def press(label):
-    action = lookup(label, 'button').queryAction()
+def press(label, role='button'):
+    action = lookup(label, role).queryAction()
     if not action.nActions or not action.doAction(0):
         raise AssertionError(f'Button was not activated: {label}')
 
@@ -90,8 +90,7 @@ def verify(binary, locales, profile):
         lookup(zh['connections.empty'], 'heading')
         for route in ('objects', 'tasks', 'settings'):
             visit(zh, route)
-        lookup(zh['settings.language'], 'combo box').queryComponent().grabFocus()
-        subprocess.run(['xdotool', 'key', '--clearmodifiers', 'End', 'Return'], check=True)
+        press(en['language.nativeName'], 'radio button')
         lookup(en['nav.settings'], 'heading')
         visit(en, 'connections')
         press(en['connections.add'])

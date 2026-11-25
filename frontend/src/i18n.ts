@@ -18,14 +18,13 @@ function readPacks(): LanguagePack[] {
   } catch { return [] }
 }
 const packs = ref(readPacks())
-const available = computed(() => [
-  { locale: 'zh-CN', name: zh['language.nativeName'] },
-  { locale: 'en-US', name: en['language.nativeName'] },
-  ...packs.value.map(({ locale, name }) => ({ locale, name }))
-])
+export const builtinLanguages = Object.entries(builtins).map(([locale, messages]) => ({
+  locale, name: messages['language.nativeName']
+}))
+export const importedLanguages = computed(() => packs.value.map(({ locale, name }) => ({ locale, name })))
+const available = computed(() => [...builtinLanguages, ...importedLanguages.value])
 const savedLocale = readSetting(localeKey)
 export const locale = ref(available.value.some(item => item.locale === savedLocale) ? savedLocale! : 'zh-CN')
-export const languages = available
 const selected = computed(() => builtins[locale.value] ?? packs.value.find(item => item.locale === locale.value)?.messages ?? en)
 export const t = (key: MessageKey, values?: Record<string, string | number>) => translate(key, selected.value, en, values)
 

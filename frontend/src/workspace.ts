@@ -34,14 +34,17 @@ export function localizedError(detail: ErrorDetail): WorkspaceError {
 export function workspaceError(err: unknown): WorkspaceError {
   return err instanceof WorkspaceError ? err : new WorkspaceError('error.bridge')
 }
-async function request<T>(method: string, args: unknown[], signal?: AbortSignal): Promise<T> {
+async function invoke<T>(method: string, args: unknown[], signal?: AbortSignal): Promise<Result<T>> {
   if (!isDesktop) throw new WorkspaceError('error.preview')
   const { Call } = await import('@wailsio/runtime')
   // The runtime's CancellablePromise sends a CancelCall to Go. Bind it before
   // awaiting, while the Wails call ID and cancellation callback are available.
   if (signal?.aborted) throw signal.reason
   const pending = Call.ByName('main.Workspace.' + method, ...args)
-  const result: Result<T> = await (signal ? pending.cancelOn(signal) : pending)
+  return signal ? pending.cancelOn(signal) : pending
+}
+async function request<T>(method: string, args: unknown[], signal?: AbortSignal): Promise<T> {
+  const result = await invoke<T>(method,args,signal)
   if (result.error) throw localizedError(result.error)
   if (result.data === null) throw new WorkspaceError('error.storage')
   return result.data
@@ -55,18 +58,22 @@ export async function loadProfiles() {
 export async function loadTasks() {
   tasks.value = await call<Task[]>('Tasks')
 }
-export async function saveProfile(input: Omit<Profile, 'id'> & { id?: string }) {
-  const saved = await call<Profile>('SaveConnection', input)
+// SaveAccount may persist public metadata before the OS keyring rejects a
+// credential write. Keep the returned ID so a retry edits the same record.
+export async function saveAccount(previous: Profile | null, changes: Profile, credentials: SecretInput | null) {
+  const result = await invoke<Profile>('SaveAccount', [previous, changes, credentials])
+  const error = result.error ? localizedError(result.error) : undefined
+  if (!result.data) throw error ?? new WorkspaceError('error.storage')
+  const saved = result.data
   profiles.value = [...profiles.value.filter(item => item.id !== saved.id), saved].sort((a,b) => a.name.localeCompare(b.name))
+  return { profile: saved, credentialError: error }
 }
 
-export const supportsCloud = (profile: Profile) => profile.provider === 'aws' || profile.provider === 'r2'
+export const supportsCloud = (profile: Pick<Profile, 'provider'>) => profile.provider === 'aws' || profile.provider === 'r2'
 export interface SecretInput {accessKeyId: string; secretAccessKey: string; sessionToken: string}
 export interface ObjectInfo {key: string; size: number; etag: string}
 interface BucketPage {buckets: string[]; nextToken: string}
 interface ObjectPage {objects: ObjectInfo[]; prefixes: string[]; nextToken: string}
-export const setCredentials = (profile: Profile, credentials: SecretInput) =>
-  call<boolean>('SetCredentials', profile, credentials)
 export const listBuckets = (profile: Profile, token: string) =>
   call<BucketPage>('ListBuckets', profile, token)
 export const listObjects = (profile: Profile, bucket: string, prefix: string, token: string) =>
