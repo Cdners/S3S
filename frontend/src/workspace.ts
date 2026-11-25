@@ -5,7 +5,7 @@ import en from './locales/en-US.json'
 export const providers = ['aws', 'r2', 'oss', 'tos', 's3-compatible'] as const
 export type Provider = typeof providers[number]
 export interface Profile { id: string; name: string; provider: Provider; endpoint: string; region: string }
-export interface Task { id: string; connectionId: string; direction: string; bucket: string; objectKey: string; state: string; size: number; resumable: boolean; transferredBytes?: number; lastError?: ErrorDetail }
+export interface Task { id: string; connectionId: string; direction: string; bucket: string; objectKey: string; state: string; size: number; resumable: boolean; uploadPhase?: string; cancelRequested?: boolean; transferredBytes?: number; lastError?: ErrorDetail }
 export interface ErrorDetail {
   code: string
   params?: Record<string, string>
@@ -69,3 +69,9 @@ export const startDownload = (profile: Profile, bucket: string, key: string, tit
 export const pauseDownload = (id: string) => call<boolean>('PauseDownload', id)
 export const resumeDownload = (id: string) => call<boolean>('ResumeDownload', id)
 export const forgetCredentials = (profile: Profile) => call<boolean>('ForgetCredentials', profile)
+
+export const startUpload = (profile: Profile, bucket: string, key: string, title: string) =>
+  call<string>('StartUpload', profile, bucket, key, title)
+export const pauseUpload = (id: string) => call<boolean>('PauseUpload', id)
+export const resumeUpload = (id: string) => call<boolean>('ResumeUpload', id)
+export const cancelUpload = (id: string) => call<boolean>('CancelUpload', id)

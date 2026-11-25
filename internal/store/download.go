@@ -50,14 +50,15 @@ func (s *Store) Download(ctx context.Context, id string) (Download, error) {
 }
 
 const taskSelect = `SELECT t.id,t.connection_id,t.direction,t.bucket,t.object_key,t.local_path,t.size,t.state,t.upload_id,
-    COALESCE((SELECT SUM(p.size) FROM parts p WHERE p.task_id=t.id),0),d.last_error,d.task_id IS NOT NULL
-    FROM tasks t LEFT JOIN downloads d ON d.task_id=t.id`
+    COALESCE((SELECT SUM(p.size) FROM parts p WHERE p.task_id=t.id),0),COALESCE(d.last_error,u.last_error),
+    d.task_id IS NOT NULL OR u.task_id IS NOT NULL,COALESCE(u.phase,''),COALESCE(u.cancel_requested,0)
+    FROM tasks t LEFT JOIN downloads d ON d.task_id=t.id LEFT JOIN uploads u ON u.task_id=t.id`
 
 func scanTask(row interface{ Scan(...any) error }) (core.Task, error) {
 	var t core.Task
 	var detail sql.NullString
 	if err := row.Scan(&t.ID, &t.ConnectionID, &t.Direction, &t.Bucket, &t.ObjectKey, &t.LocalPath, &t.Size, &t.State, &t.UploadID,
-		&t.TransferredBytes, &detail, &t.Resumable); err != nil {
+		&t.TransferredBytes, &detail, &t.Resumable, &t.UploadPhase, &t.CancelRequested); err != nil {
 		return t, dbError(err)
 	}
 	if detail.Valid {

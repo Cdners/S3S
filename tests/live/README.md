@@ -1,4 +1,6 @@
-# AWS S3 / Cloudflare R2 只读验收
+# AWS S3 / Cloudflare R2 厂商验收
+
+## 已知对象只读验证
 
 在专用测试桶中选择一个已有的小文件（1 字节至 1 MiB），先取得其已知 SHA-256。测试只向所选桶发出带前缀的对象列表、HEAD 和条件范围读取，逐字节核对长度和摘要。单次验收限时 45 秒。
 
@@ -21,3 +23,13 @@ go test -mod=readonly -tags livecloud -count=1 -v ./tests/live
 ```
 
 云端的 `scripts/cloud-linux.sh setup` 安装了可用的 Go 工具链。如果安全配置注入宿主进程，可在宿主设置 `PATH=/workspace/.s3s-tools/go/bin:$PATH`、`GOPATH=/workspace/.s3s-tools/gopath`、`GOCACHE=/workspace/.s3s-tools/gocache` 执行上述命令。厂商验收需要测试端点的出站访问，以及能够用于 SigV4 本地签名的专用临时凭据。网页报告仅记录厂商、检查项目和结果。
+
+## 真实分片写入与中止
+
+使用专用桶、专用凭据和前缀 `s3s-acceptance/`。在同一云端 Go 环境设置上述提供方、桶、区域或端点和鉴权变量后，显式运行：
+
+```sh
+go test -mod=readonly -tags liveupload -count=1 -v ./tests/live
+```
+
+这项测试会在唯一 Key 下创建分片会话，发送一个 5 MiB 的随机分片，核对服务返回的分片编号、长度和 ETag，然后中止会话并确认服务报告会话已消失。网络上传限时 90 秒，清理另留 30 秒。它不需要既有对象或参考摘要。所用身份需具备该前缀的分片写入、列举分片和中止权限。若创建响应丢失或测试进程被强制终止，桶的过期分片生命周期规则可清理未完成的会话。

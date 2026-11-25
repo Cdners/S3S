@@ -79,6 +79,12 @@ func main() {
 		URL:                        "/",
 	})
 
+	workspace.chooseSource = func(title string) (string, error) {
+		dialog := app.Dialog.OpenFile()
+		dialog.SetOptions(&application.OpenFileDialogOptions{Title: title, Window: window, CanChooseFiles: true})
+		return dialog.PromptForSingleSelection()
+	}
+
 	workspace.chooseDestination = func(title string) (string, error) {
 		dialog := app.Dialog.SaveFile()
 		dialog.SetOptions(&application.SaveFileDialogOptions{Title: title, Window: window, CanCreateDirectories: true})

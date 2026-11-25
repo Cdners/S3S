@@ -55,7 +55,7 @@ type Capabilities struct {
 // CapabilitiesFor reports only operations backed by a working adapter.
 func CapabilitiesFor(provider Provider) Capabilities {
 	if provider == AWS || provider == R2 {
-		return Capabilities{ListBuckets: true, ListObjects: true, Download: true}
+		return Capabilities{ListBuckets: true, ListObjects: true, Upload: true, Download: true, ResumeParts: true}
 	}
 	return Capabilities{}
 }
@@ -122,6 +122,8 @@ type Task struct {
 	TransferredBytes int64  `json:"transferredBytes"`
 	LastError        *Error `json:"lastError,omitempty"`
 	Resumable        bool   `json:"resumable"`
+	UploadPhase      string `json:"uploadPhase,omitempty"`
+	CancelRequested  bool   `json:"cancelRequested,omitempty"`
 }
 
 func (t Task) ValidateNew() error {

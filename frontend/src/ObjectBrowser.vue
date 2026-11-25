@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Box, Download, Folder, FolderOpen, KeyRound, RefreshCw } from '@lucide/vue'
+import { ArrowLeft, ArrowRight, Box, Download, FileUp, Folder, FolderOpen, KeyRound, RefreshCw } from '@lucide/vue'
 import { t, locale } from './i18n'
 import { Listing, PaginationError, parentPrefix } from './listing'
 import ErrorNotice from './ErrorNotice.vue'
+import UploadDialog from './UploadDialog.vue'
 import {
   isDesktop, listBuckets, listObjects, profiles, startDownload, supportsCloud,
   WorkspaceError, workspaceError, type ObjectInfo, type Profile
@@ -24,15 +25,17 @@ const bucketError = ref<WorkspaceError>()
 const objectError = ref<WorkspaceError>()
 const downloadError = ref<WorkspaceError>()
 const prompting = ref(false)
-const enqueued = ref(false)
+const enqueued = ref<'download' | 'upload'>()
+const uploadDialog = ref(false)
 let scope = 0
 
 function resetObjectView() {
   scope++
+  uploadDialog.value = false
   objects.reset()
   objectError.value = undefined
   downloadError.value = undefined
-  enqueued.value = false
+  enqueued.value = undefined
   prompting.value = false
 }
 function reset() {
@@ -86,11 +89,11 @@ async function download(key:string) {
   if (!conn || prompting.value) return
   const generation = scope
   prompting.value = true
-  enqueued.value = false
+  enqueued.value = undefined
   downloadError.value = undefined
   try {
     const id = await startDownload(conn, bucket.value, key, t('native.saveTitle'))
-    if (generation === scope) enqueued.value = Boolean(id)
+    if (generation === scope) enqueued.value = id ? 'download' : undefined
   } catch (error) {
     if (generation === scope) downloadError.value = workspaceError(error)
   } finally {
@@ -129,11 +132,13 @@ async function download(key:string) {
       </div>
       <section v-if="bucket" class="remote-list">
         <div class="location"><div><h3>{{ bucket }}</h3><span class="object-key">{{ prefix || t('objects.root') }}</span></div>
-          <div class="browse-actions"><button v-if="prefix" class="secondary" @click="open(bucket, parentPrefix(prefix))"><ArrowLeft/>{{ t('objects.up') }}</button>
+          <div class="browse-actions">
+            <button class="primary" :disabled="prompting || unavailable" @click="uploadDialog = true"><FileUp/>{{ t('objects.upload') }}</button>
+            <button v-if="prefix" class="secondary" @click="open(bucket, parentPrefix(prefix))"><ArrowLeft/>{{ t('objects.up') }}</button>
           <button class="icon-button" :aria-label="t('objects.refresh')" @click="open(bucket,prefix)"><RefreshCw/></button></div></div>
         <ErrorNotice v-if="objectError" :error="objectError"/>
         <ErrorNotice v-if="downloadError" :error="downloadError"/>
-        <p v-if="enqueued" role="status" class="notice">{{ t('objects.enqueued') }} <button class="inline-button" @click="emit('tasks')">{{ t('nav.tasks') }}</button></p>
+        <p v-if="enqueued" role="status" class="notice">{{ t(enqueued === 'upload' ? 'upload.enqueued' : 'objects.enqueued') }} <button class="inline-button" @click="emit('tasks')">{{ t('nav.tasks') }}</button></p>
         <div class="table-scroll"><table><thead><tr><th>{{ t('objects.key') }}</th><th>{{ t('objects.size') }}</th><th>{{ t('connections.actions') }}</th></tr></thead>
           <tbody><tr v-for="item in objects.entries" :key="item.kind+':'+item.name">
             <td><button v-if="item.kind === 'prefix'" class="inline-button object-key" @click="open(bucket,item.name)"><Folder/>{{ item.name }}</button>
@@ -144,6 +149,8 @@ async function download(key:string) {
         <div class="page-status" aria-live="polite"><span v-if="objects.loading">{{ t('common.loading') }}</span>
           <span v-else-if="objects.loaded && !objects.entries.length">{{ t('objects.noObjects') }}</span>
           <button v-if="!objects.loading && (objects.nextToken || objectError)" class="inline-button" @click="moreObjects">{{ t(objectError ? 'action.retry' : 'objects.moreObjects') }}</button></div>
+        <UploadDialog v-if="uploadDialog && profile" :profile="profile" :bucket="bucket" :prefix="prefix"
+          @close="uploadDialog = false" @enqueued="uploadDialog = false; enqueued = 'upload'"/>
       </section>
     </div>
   </section>

@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"github.com/Cdners/S3S/internal/transfer"
-	"github.com/gofrs/flock"
+	"net/http"
 	"sync"
 
 	"github.com/Cdners/S3S/internal/core"
 	"github.com/Cdners/S3S/internal/store"
+	"github.com/Cdners/S3S/internal/transfer"
+	"github.com/gofrs/flock"
 )
 
 // Workspace exposes metadata and write-only credential provisioning. Object
@@ -21,6 +22,8 @@ type Workspace struct {
 	store             *store.Store
 	lock              *flock.Flock
 	engine            *transfer.Engine
+	storageTransport  http.RoundTripper
+	chooseSource      func(string) (string, error)
 	chooseDestination func(string) (string, error)
 
 	// Serialize a profile edit with checking that a credential write still targets it.
@@ -86,6 +89,13 @@ func (w *Workspace) Tasks(ctx context.Context) response[[]core.Task] {
 	tasks, err := w.store.Tasks(ctx)
 	if err != nil {
 		return failure[[]core.Task](err, "error.storageRead")
+	}
+	// Only the engine reopens an upload source. Its absolute native path is
+	// unnecessary for task progress or control in the renderer.
+	for i := range tasks {
+		if tasks[i].Direction == core.Upload {
+			tasks[i].LocalPath = ""
+		}
 	}
 	return response[[]core.Task]{Data: tasks}
 }

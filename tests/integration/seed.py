@@ -2,6 +2,7 @@
 import hashlib
 import json
 import secrets
+import sys
 import time
 from pathlib import Path
 
@@ -25,6 +26,21 @@ for attempt in range(40):
             raise
         time.sleep(.25)
 bucket = 's3s-fixture'
+if len(sys.argv) > 1:
+    # Independent inspection after Go tests, including jobs that exercised a
+    # failed conditional completion followed by explicit cancellation.
+    if client.list_multipart_uploads(Bucket=bucket).get('Uploads'):
+        raise AssertionError('A multipart session survived the integration run')
+    if sys.argv[1] == 'desktop':
+        result = client.get_object(Bucket=bucket, Key='ui-upload +%.bin')
+        downloaded = result['Body'].read()
+        expected = hashlib.shake_256(b'S3S UI upload').digest((8 << 20) + 37)
+        if downloaded != expected or result['Metadata'].get('s3s-sha256') != hashlib.sha256(expected).hexdigest():
+            raise AssertionError('Native upload bytes or source digest differ from the selected file')
+        print('PASS independent readback of native multipart upload, exact bytes and source metadata')
+    print('PASS independent scan for unclosed multipart sessions')
+    sys.exit(0)
+
 client.create_bucket(Bucket=bucket)
 # Force at least two ListObjectsV2 pages plus a distinct CommonPrefixes entry.
 for index in range(103):

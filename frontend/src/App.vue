@@ -9,8 +9,10 @@ import ProfileDialog from './ProfileDialog.vue'
 import CredentialsDialog from './CredentialsDialog.vue'
 import ObjectBrowser from './ObjectBrowser.vue'
 import ErrorNotice from './ErrorNotice.vue'
+import CancelUploadDialog from './CancelUploadDialog.vue'
+import { taskActions, type TaskAction } from './transferActions'
 import { importLanguage, languages, locale, setLanguage, t, type MessageKey } from './i18n'
-import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, supportsCloud, pauseDownload, resumeDownload, localizedError, type Profile, type Provider, type WorkspaceError } from './workspace'
+import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, supportsCloud, pauseDownload, resumeDownload, pauseUpload, resumeUpload, cancelUpload, localizedError, type Task, type Profile, type Provider, type WorkspaceError } from './workspace'
 
 type Page = 'connections' | 'objects' | 'tasks' | 'settings'
 const nav = [{ id:'connections', icon:Waypoints }, { id:'objects', icon:FolderClosed }, { id:'tasks', icon:ArrowDownUp }] as const
@@ -19,6 +21,8 @@ const query = ref('')
 const filter = ref<Provider | ''>('')
 const credentialProfile = ref<Profile>()
 const pendingTask = ref('')
+const cancelID = ref('')
+const cancelTarget = computed(() => tasks.value.find(task => task.id === cancelID.value && taskActions(task).includes('cancel')))
 const fetchedTasks = ref(false)
 const taskFailure = ref<WorkspaceError>()
 const editing = ref<Profile>()
@@ -47,12 +51,35 @@ async function refresh(kind: 'connections' | 'tasks') {
   catch (error) { failures.value[kind] = workspaceError(error) }
   finally { loading.value[kind] = false }
 }
-async function taskAction(id:string, action:'pause' | 'resume') {
-  if (pendingTask.value) return
-  pendingTask.value = id
+const uploadPhases: Record<string, MessageKey> = {
+  ready:'upload.phaseReady', creating:'upload.phaseCreating', active:'upload.phaseActive',
+  completing:'upload.phaseCompleting', aborting:'upload.phaseAborting'
+}
+function phaseLabel(task:Task): MessageKey | undefined {
+  if (task.direction !== 'upload' || task.state === 'completed' || task.state === 'canceled') return
+  if (task.cancelRequested) return 'upload.phaseCleanup'
+  return uploadPhases[task.uploadPhase ?? '']
+}
+function actionLabel(task:Task, action:TaskAction): MessageKey {
+  if (action === 'resume') return task.direction === 'upload' ? 'tasks.resumeUpload' : 'tasks.resume'
+  return {pause:'tasks.pause', cancel:'tasks.cancelUpload', cleanup:'tasks.retryCleanup'}[action] as MessageKey
+}
+async function taskAction(task:Task, action:TaskAction, confirmed = false) {
+  if (pendingTask.value || !taskActions(task).includes(action)) return
+  if (action === 'cancel' && !confirmed) {
+    cancelID.value = task.id
+    return
+  }
+  cancelID.value = ''
+  pendingTask.value = task.id
   taskFailure.value = undefined
   try {
-    await (action === 'pause' ? pauseDownload(id) : resumeDownload(id))
+    if (task.direction === 'download') {
+      await (action === 'pause' ? pauseDownload(task.id) : resumeDownload(task.id))
+    } else {
+      const request = {pause:pauseUpload, resume:resumeUpload, cancel:cancelUpload, cleanup:cancelUpload}[action]
+      await request(task.id)
+    }
     await refresh('tasks')
   } catch (error) { taskFailure.value = workspaceError(error) }
   finally { pendingTask.value = '' }
@@ -141,11 +168,12 @@ async function importFile(event: Event) {
             <tbody v-if="!failure">
               <tr v-for="task in tasks" :key="task.id"><td class="object-key">{{ task.bucket }}/{{ task.objectKey }}</td>
                 <td>{{ t(task.direction === 'upload' ? 'tasks.upload' : task.direction === 'download' ? 'tasks.download' : 'tasks.unknown') }}</td>
-                <td>{{ t(states[task.state] ?? 'tasks.unknown') }}<ErrorNotice v-if="task.lastError" :error="localizedError(task.lastError)"/></td>
+                <td>{{ t(states[task.state] ?? 'tasks.unknown') }}<small v-if="phaseLabel(task)" class="task-phase">{{ t(phaseLabel(task)!) }}</small><ErrorNotice v-if="task.lastError" :error="localizedError(task.lastError)"/></td>
                 <td>{{ t('tasks.bytes', {done:(task.transferredBytes ?? 0).toLocaleString(locale), total:task.size.toLocaleString(locale)}) }}</td>
-                <td v-if="task.direction === 'download' && task.resumable === true">
-                  <button v-if="task.state === 'running'" class="inline-button" :disabled="!!pendingTask" @click="taskAction(task.id,'pause')">{{ t('tasks.pause') }}</button>
-                  <button v-else-if="['queued','paused','failed'].includes(task.state)" class="inline-button" :disabled="!!pendingTask" @click="taskAction(task.id,'resume')">{{ t('tasks.resume') }}</button></td><td v-else></td>
+                <td><div class="task-actions">
+                  <button v-for="action in taskActions(task)" :key="action" class="inline-button" :class="{destructive:action === 'cancel'}"
+                    :disabled="!!pendingTask" @click="taskAction(task,action)">{{ t(actionLabel(task,action)) }}</button>
+                </div></td>
               </tr></tbody></table></div>
           <div v-if="failure || !tasks.length" class="empty"><div class="empty-icon"><ArrowDownUp /></div>
             <h3>{{ t(!isDesktop || failure ? 'tasks.title' : fetchedTasks ? 'tasks.empty' : 'common.loading') }}</h3><p>{{ t('tasks.emptyText') }}</p></div>
@@ -163,6 +191,9 @@ async function importFile(event: Event) {
         </section>
       </template>
     </main>
+    <CancelUploadDialog v-if="cancelTarget" :task="cancelTarget"
+      :connection="profiles.find(item => item.id === cancelTarget?.connectionId)?.name ?? cancelTarget.connectionId"
+      @close="cancelID = ''" @confirm="taskAction(cancelTarget,'cancel',true)"/>
     <CredentialsDialog v-if="credentialProfile" :profile="credentialProfile" @close="credentialProfile = undefined" @saved="credentialProfile = undefined"/>
     <ProfileDialog v-if="showDialog" :profile="editing" @close="showDialog = false"/>
   </div>

@@ -1,4 +1,4 @@
-// Package s3client implements read-only cloud operations using a single connection's
+// Package s3client implements cloud operations using a single connection's
 // explicit credentials. It never consults AWS profiles, IMDS, or credential env vars.
 package s3client
 
@@ -27,10 +27,18 @@ type Credentials struct {
 
 type Client struct {
 	api      *s3.Client
+	partHTTP *http.Client
 	provider core.Provider
 }
 
 var (
+	// Bound the wait after a request body has finished sending. A healthy
+	// multi-GiB part on a slow connection can legitimately take hours to send.
+	storageTransport = func() *http.Transport {
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.ResponseHeaderTimeout = 3 * time.Minute
+		return t
+	}()
 	regionName   = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
 	r2Host       = regexp.MustCompile(`^[a-f0-9]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
 	bucketName   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,253}$`)
@@ -39,6 +47,13 @@ var (
 )
 
 func New(c core.Connection, creds Credentials) (*Client, error) {
+	return NewWithTransport(c, creds, nil)
+}
+
+// NewWithTransport applies the same endpoint and credential checks as New.
+// A nil transport uses the shared storage transport. An explicit transport
+// runs beneath the origin guard for every request from this client.
+func NewWithTransport(c core.Connection, creds Credentials, transport http.RoundTripper) (*Client, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -76,7 +91,10 @@ func New(c core.Connection, creds Credentials) (*Client, error) {
 		}
 		region = "auto"
 	}
-	return newClient(c.Provider, region, endpoint, creds, http.DefaultTransport), nil
+	if transport == nil {
+		transport = storageTransport
+	}
+	return newClient(c.Provider, region, endpoint, creds, transport), nil
 }
 
 // Reject a signed request if SDK endpoint resolution ever leaves this connection's
@@ -94,20 +112,25 @@ func (t originTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func newClient(provider core.Provider, region, endpoint string, creds Credentials, transport http.RoundTripper) *Client {
+	metadataHTTP := &http.Client{
+		Transport:     originTransport{endpoint, transport},
+		Timeout:       3 * time.Minute,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	partHTTP := *metadataHTTP
+	partHTTP.Timeout = 0 // Use task cancellation and the transport's response-header deadline.
 	api := s3.New(s3.Options{
 		Region: region, BaseEndpoint: aws.String(endpoint), UsePathStyle: true,
-		Credentials: credentials.NewStaticCredentialsProvider(creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken),
-		HTTPClient: &http.Client{
-			Transport: originTransport{endpoint, transport}, Timeout: 3 * time.Minute,
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-		Retryer:                    aws.NopRetryer{}, // the engine owns retry budgets and checkpoints
+		Credentials:                credentials.NewStaticCredentialsProvider(creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken),
+		HTTPClient:                 metadataHTTP,
+		Retryer:                    aws.NopRetryer{},                           // the engine owns retry budgets and checkpoints
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired, // uploads carry an explicit Content-MD5
 		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
 	})
-	return &Client{api: api, provider: provider}
+	return &Client{api: api, partHTTP: &partHTTP, provider: provider}
 }
 
-func cloudError(err error) error {
+func cloudError(err error) *core.Error {
 	result := core.NewError("error.cloudRequest")
 	if errors.Is(err, context.Canceled) {
 		return result

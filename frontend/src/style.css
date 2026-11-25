@@ -138,3 +138,14 @@ td .cloud-error { margin:6px 0; min-width:120px; font-size:12px; }
 .credentials-footer { align-items:center; flex-wrap:wrap; }
 .credentials-footer > .inline-button { margin-inline-end:auto; color:#a33330; }
 .remove-prompt { padding:20px 22px; line-height:1.6; }
+
+#upload-key { font:inherit; font-size:14px; border:1px solid #c6cfd5; border-radius:6px; padding:9px 12px; width:100%; resize:vertical; }
+#upload-key:focus-visible { outline:3px solid #46b5b2; outline-offset:2px; }
+.upload-target { display:grid; grid-template-columns:auto minmax(0,1fr); gap:5px 12px; font-size:13px; margin:0 0 10px; }
+.upload-target dt,.task-phase { color:var(--muted); }
+.upload-target dd { margin:0; overflow-wrap:anywhere; }
+.cancel-summary { padding:20px 22px; line-height:1.65; font-size:14px; }
+.task-phase { display:block; margin-top:4px; font-size:12px; }
+.task-actions { display:flex; flex-wrap:wrap; gap:8px 12px; }
+.task-actions .destructive { color:#9d2c30; }
+.danger { background:#a62e31; color:white; border:1px solid #982629; border-radius:7px; padding:10px 15px; font-weight:600; }

@@ -55,7 +55,7 @@ jobs:
           gcc -dumpmachine | grep -E '^x86_64-w64-mingw32'
       - name: Check UI, language resources and Go
         run: bash scripts/check.sh
-      - name: Verify paginated listing and restartable downloads against isolated S3
+      - name: Verify S3 listing and recoverable transfers against an isolated service
         if: runner.os == 'Linux'
         run: |
           export S3S_INTEGRATION_BINARY="$RUNNER_TEMP/s3s-integration"

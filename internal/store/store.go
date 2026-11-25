@@ -23,6 +23,9 @@ var schema1 string
 //go:embed migrations/002.sql
 var schema2 string
 
+//go:embed migrations/003.sql
+var schema3 string
+
 type Store struct{ db *sql.DB }
 
 func Open(path string) (*Store, error) {
@@ -64,7 +67,7 @@ func migrate(db *sql.DB) error {
 	if err := tx.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	migrations := []string{schema1, schema2}
+	migrations := []string{schema1, schema2, schema3}
 	if version < 0 || version > len(migrations) {
 		return errors.New("unsupported S3S database schema version")
 	}
@@ -171,16 +174,8 @@ func (s *Store) Transition(ctx context.Context, id string, from, to core.TaskSta
 	if !from.CanTransition(to) {
 		return core.NewError(core.InvalidTransition)
 	}
-	return requireMatch(s.db.ExecContext(ctx, "UPDATE tasks SET state=? WHERE id=? AND state=?", to, id, from))
-}
-
-// BindUpload records the provider's multipart session before any part can be checkpointed.
-func (s *Store) BindUpload(ctx context.Context, id, uploadID string) error {
-	if uploadID == "" {
-		return core.NewError(core.InvalidTask)
-	}
-	return requireMatch(s.db.ExecContext(ctx, `UPDATE tasks SET upload_id=? WHERE id=? AND direction='upload'
-		AND state='running' AND upload_id IN ('',?)`, uploadID, id, uploadID))
+	return requireMatch(s.db.ExecContext(ctx, `UPDATE tasks SET state=? WHERE id=? AND state=?
+        AND ((?='queued' AND ?='paused') OR NOT EXISTS(SELECT 1 FROM uploads WHERE task_id=tasks.id))`, to, id, from, from, to))
 }
 
 // Checkpoint records acknowledged bytes. Identical writes are safe to retry.
@@ -198,10 +193,12 @@ func (s *Store) Checkpoint(ctx context.Context, id string, p core.Part) error {
 	var state core.TaskState
 	var direction core.Direction
 	var uploadID string
-	if err := tx.QueryRowContext(ctx, "SELECT size,state,direction,upload_id FROM tasks WHERE id=?", id).Scan(&size, &state, &direction, &uploadID); err != nil {
+	var managedUpload bool
+	if err := tx.QueryRowContext(ctx, `SELECT size,state,direction,upload_id,
+        EXISTS(SELECT 1 FROM uploads WHERE task_id=tasks.id) FROM tasks WHERE id=?`, id).Scan(&size, &state, &direction, &uploadID, &managedUpload); err != nil {
 		return dbError(err)
 	}
-	if state != core.Running || direction == core.Upload && uploadID == "" {
+	if managedUpload || state != core.Running || direction == core.Upload && uploadID == "" {
 		return core.NewError(core.Conflict)
 	}
 	if p.Size > size || p.Offset > size-p.Size {

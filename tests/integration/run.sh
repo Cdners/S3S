@@ -48,7 +48,9 @@ sandbox=(--init --rm --network "container:$service" --read-only --cap-drop=ALL -
 # The test executable needs glibc and no desktop dependencies.
 base='debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0'
 docker run "${sandbox[@]}" "$base" /fixture/integration -test.v -test.timeout 90s
+audit=protocol
 if [[ $# -gt 0 ]]; then
+  audit=desktop
   install -m 0555 "$1" "$stage/fixture/S3S"
   install -m 0444 tests/ui/native.py tests/integration/desktop.py frontend/src/locales/{en-US,zh-CN}.json "$stage/fixture/"
   docker build -t s3s-keyring-integration:local -f tests/integration/Dockerfile.desktop tests/integration
@@ -57,3 +59,4 @@ if [[ $# -gt 0 ]]; then
     xvfb-run -a -s '-noreset -screen 0 1440x900x24' dbus-run-session -- \
     sh -ec 'xdotool getdisplaygeometry >/dev/null; exec python3 /fixture/desktop.py'
 fi
+docker exec -i "$service" python - "$audit" < tests/integration/seed.py

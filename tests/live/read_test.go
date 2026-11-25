@@ -9,45 +9,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"os"
 	"testing"
 	"time"
-
-	"github.com/Cdners/S3S/internal/core"
-	"github.com/Cdners/S3S/internal/s3client"
 )
 
-func required(t *testing.T, name string) string {
-	t.Helper()
-	value := os.Getenv(name)
-	if value == "" {
-		t.Fatalf("set %s for the chosen fixture", name)
-	}
-	return value
-}
-
 func TestReadFixture(t *testing.T) {
-	provider := core.Provider(required(t, "S3S_TEST_PROVIDER"))
-	if provider != core.AWS && provider != core.R2 {
-		t.Fatal("S3S_TEST_PROVIDER must be aws or r2")
-	}
-	conn := core.Connection{
-		ID: "live-read", Name: "live-read", Provider: provider,
-		Region: os.Getenv("S3S_TEST_REGION"), Endpoint: os.Getenv("S3S_TEST_ENDPOINT"),
-	}
+	client := fixtureClient(t)
 	bucket := required(t, "S3S_TEST_BUCKET")
 	key := required(t, "S3S_TEST_KEY")
 	wantDigest, err := hex.DecodeString(required(t, "S3S_TEST_SHA256"))
 	if err != nil || len(wantDigest) != sha256.Size {
 		t.Fatal("S3S_TEST_SHA256 must contain the fixture's 64-digit hex digest")
-	}
-	client, err := s3client.New(conn, s3client.Credentials{
-		AccessKeyID:     required(t, "S3S_TEST_ACCESS_KEY_ID"),
-		SecretAccessKey: required(t, "S3S_TEST_SECRET_ACCESS_KEY"),
-		SessionToken:    os.Getenv("S3S_TEST_SESSION_TOKEN"),
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()

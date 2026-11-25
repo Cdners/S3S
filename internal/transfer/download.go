@@ -39,6 +39,9 @@ type Engine struct {
 func New(db *store.Store) *Engine { return &Engine{db: db, rangeSize: 8 << 20} }
 
 func (e *Engine) Recover(ctx context.Context) error {
+	if err := e.db.RecoverUploads(ctx); err != nil {
+		return err
+	}
 	if err := e.db.RecoverDownloads(ctx); err != nil {
 		return err
 	}

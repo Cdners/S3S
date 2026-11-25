@@ -34,7 +34,7 @@ func (w *Workspace) SetCredentials(ctx context.Context, expected core.Connection
 	if err == nil {
 		// Validate the configured origin and region before saving keys. Creating
 		// an SDK client performs no network request or credential discovery.
-		_, err = s3client.New(c, sdkCredentials(input))
+		_, err = s3client.NewWithTransport(c, sdkCredentials(input), w.storageTransport)
 	}
 	if err == nil {
 		err = (vault.Vault{}).Save(c, input)
@@ -79,7 +79,7 @@ func (w *Workspace) client(ctx context.Context, expected core.Connection) (*s3cl
 	if err != nil {
 		return nil, err
 	}
-	return s3client.New(c, sdkCredentials(credentials))
+	return s3client.NewWithTransport(c, sdkCredentials(credentials), w.storageTransport)
 }
 
 func (w *Workspace) ListBuckets(ctx context.Context, c core.Connection, token string) response[*s3client.BucketPage] {

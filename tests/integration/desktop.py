@@ -1,4 +1,5 @@
 """Native Wails UI + Linux Secret Service + loopback S3 emulator."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,21 @@ def enter(value):
 def select_end(label):
     lookup(label, 'combo box').queryComponent().grabFocus()
     keys('End', 'Return')
+
+
+def wait_completed_upload(en, object_name):
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        cell = lookup(object_name, 'table cell')
+        try:
+            values = [node.queryText().getText(0, -1) for node in cell.parent
+                      if 'Text' in node.get_interfaces()]
+            if en['tasks.upload'] in values and en['state.completed'] in values:
+                return
+        except RuntimeError:
+            pass  # The next queue poll may replace this row.
+        time.sleep(.15)
+    raise AssertionError('The uploaded object did not reach Completed in Task center')
 
 
 def verify():
@@ -83,13 +99,26 @@ def verify():
                 time.sleep(.1)
             if destination.read_bytes() != b'S3S native browser fixture\n':
                 raise AssertionError('Desktop download differed from fixture bytes')
+            # Save created a real entry in GTK's Recent list. Replace this
+            # test file's bytes to distinguish the upload from the download.
+            destination.write_bytes(hashlib.shake_256(b'S3S UI upload').digest((8 << 20) + 37))
+            upload_key = 'ui-upload +%.bin'
+            press(en['objects.upload'])
+            lookup(en['objects.upload'], 'heading')
+            enter(upload_key)
+            press(en['upload.chooseFile'])
+            lookup(en['native.openTitle'])
+            file_row = lookup(destination.name, 'table cell').parent
+            if not file_row.parent.querySelection().selectChild(file_row.getIndexInParent()):
+                raise AssertionError('GTK could not select the source file')
+            press('Open')
             visit(en, 'tasks')
-            lookup(en['state.completed'], 'table cell')
+            wait_completed_upload(en, bucket + '/' + upload_key)
         for path in (root / 'XDG_CONFIG_HOME' / 'S3S').glob('workspace.sqlite3*'):
             data = path.read_bytes()
             if any(word.encode() in data for word in credentials.values()):
                 raise AssertionError('A fixture credential appeared in SQLite')
-    print('PASS native credentials, OS keyring after restart, buckets/objects, native Save dialog, download bytes and completed task')
+    print('PASS native credentials, OS keyring after restart, buckets/objects, native Open/Save dialogs, download bytes and completed upload row')
 
 
 if __name__ == '__main__':
