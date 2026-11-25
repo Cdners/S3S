@@ -19,10 +19,13 @@
 - **执行通过**。锁文件安装、11 项前端测试、Vue 类型检查和生产构建。Chromium 验证中英导航、语言资源导入、取消准备时实际发送的 Wails 调用 ID，以及迟到响应不会中止已入队任务。
 - **执行通过**。Go 模块校验、vet 和 6 个包的 54 项顶层测试。断网容器内的全包竞态检测通过。测试覆盖 v1/v2 数据迁移、源文件改变、空文件写入被拒绝、完成响应丢失、取消与完成争用，以及 SQLite 最终状态写入失败后恢复任务控制。
 - **已修复并复验**。早期 GTK 自动化未选中源文件，桌面测试未通过；改为选中真实文件行后，原生上传与独立读回通过。Go 桥接测试在 SDK 更换传输层后失去隔离，现按测试实例注入传输，并在断网容器执行竞态检测。
+- **执行失败并定位**。在 `32e3797` 的原生归档上，同时终止 Wails 和全部 WebKit 子进程曾使刚写入的语言偏好丢失。将应用退出与强杀传输进程分开验收后，5 个全新配置目录都在正常退出、重新打开时读回英语和连接记录。语言偏好依赖 WebView 落盘；强杀测试继续独立覆盖 SQLite 传输检查点。
 - **未执行**。真实 AWS/R2 专用桶及整机重启验收。本实例未配置厂商测试桶与身份。Windows、macOS 的桌面交互需另行验证。
 - **已知限制**。若服务已经创建会话，但进程在保存会话 ID 前中断，应用无法确认未知会话归属。此时保留不确定状态，由桶的过期分片生命周期规则清理。空文件 PUT 响应若丢失且远端持续不存在，也没有会话 ID 可据以中止；这时保留待核对状态。源文件摘要在入队前计算，停止准备可中断这次读取。自动重试及完整脱敏重试记录待开发。
 
-实现提交 `8b67e84` 已推送并触发[原生四平台构建](https://github.com/Cdners/S3S/actions/runs/45598357667)。本轮以 `main` 为 PR 目标，因为前两轮代码也在此分支的祖先提交中，且尚未合入主分支。此云实例的 GitHub GraphQL API 返回 `Forbidden`，因此尚无 PR 编号。[完整改动对比与 PR 入口](https://github.com/Cdners/S3S/compare/main...feat/m1-resumable-upload?expand=1)
+实现提交 `8b67e84` 的 Windows amd64、Linux amd64、macOS arm64 和 macOS amd64 四个原生作业全部通过，已核对带完整 SHA 的四份产物与归档摘要。上传操作修复提交 `32e3797` 也已从云端 Linux 归档启动，经 GTK 文件对话框上传并独立核对对象字节。[初始实现构建及产物](https://github.com/Cdners/S3S/actions/runs/45598357667) · [操作修复提交的原生作业](https://github.com/Cdners/S3S/actions/runs/45598776418)
+
+本轮以 `main` 为 PR 目标，因为前两轮代码也在此分支的祖先提交中，且尚未合入主分支。此云实例的 GitHub GraphQL API 返回 `Forbidden`，因此尚无 PR 编号。[完整改动对比与 PR 入口](https://github.com/Cdners/S3S/compare/main...feat/m1-resumable-upload?expand=1)
 
 M1 下一步为对象复制、删除、失败重试和两家厂商的隔离桶验收。后续阶段见[路线图](ROADMAP.md)。[本分支四平台运行及产物](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Fm1-resumable-upload)
 

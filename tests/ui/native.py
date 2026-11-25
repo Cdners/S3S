@@ -59,14 +59,13 @@ def desktop(binary, profile):
         env[variable] = str(path)
     env.update(GDK_BACKEND='x11', GTK_A11Y='atspi', GSK_RENDERER='cairo',
                LIBGL_ALWAYS_SOFTWARE='1', MESA_SHADER_CACHE_DISABLE='true', GSETTINGS_BACKEND='memory')
-    # WebKit spawns network and renderer processes. Signal the entire isolated
-    # app group before reopening or removing this test's private profile.
+    # Keep WebKit helpers alive while Wails handles SIGTERM as application Quit.
+    # Stopping the renderer group first can discard pending localStorage writes.
     app = subprocess.Popen([binary], env=env, start_new_session=True)
     try:
         yield
     finally:
-        with suppress(ProcessLookupError):
-            os.killpg(app.pid, signal.SIGTERM)
+        app.terminate()
         with suppress(subprocess.TimeoutExpired):
             app.wait(timeout=6)
         with suppress(ProcessLookupError):

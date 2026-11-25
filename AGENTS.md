@@ -19,3 +19,5 @@
 - 不在普通 PR 触发需要云密钥的测试。后续真实存储验证按 docs/TESTING.md 使用隔离桶，控制流量并清理。仅在发行维护者授权后按 docs/RELEASING.md 签名和打标签。
 
 在仓库根目录运行 `bash scripts/cloud-linux.sh setup`。执行 `export npm_config_cache=/workspace/.s3s-tools/npm-cache` 后运行 `bash scripts/check.sh frontend`、`bash scripts/cloud-linux.sh run bash scripts/check.sh go` 和 `bash scripts/cloud-linux.sh run bash scripts/build.sh`。原生 runner 的等价命令为 `bash scripts/check.sh` 和 `bash scripts/build.sh`，Linux 先执行 `bash scripts/setup-linux.sh`。
+
+修改 AWS/R2 传输或恢复时，额外运行 `bash tests/integration/run.sh`，并在云端运行 `bash scripts/cloud-linux.sh run go test -race -mod=readonly -count=1 ./...`。验证桌面文件选择器时，将本次提交构建归档解出的 Linux 可执行文件路径作为集成脚本的第一个参数。验证语言和桌面工作区时，运行 `python3 tests/ui/preview.py` 和 `bash tests/ui/linux-container.sh /path/to/S3S`。隔离测试服务、原生窗口和真实厂商桶各自记录结果。
