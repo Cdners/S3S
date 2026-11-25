@@ -20,6 +20,14 @@
 - **通过**：云端 Linux amd64 的实际 Wails/WebKitGTK 窗口在 Xvfb 上完成四页导航、键盘切换中英文、新建本地连接，并在进程重新启动后核对英语偏好及连接记录。容器不提供嵌套用户命名空间，原生图形测试在断网、非 root、最小权限的临时容器内运行，WebKit 的子进程沙箱仅在该测试容器内关闭。
 - **未执行**：Windows、macOS 原生窗口交互及真实云端操作。GitHub 托管构建按具体提交另行记录。
 
+## GitHub Actions
+
+托管工作流已在开发分支运行。开发提交 `67fb741` 的四个原生 job 均通过，GitHub 列出了对应 SHA 的四份开发归档及 SHA-256 摘要。[首次四平台构建](https://github.com/Cdners/S3S/actions/runs/45539413753)
+
+对实现提交 `3202ae0`，云机重新运行 Go 检查、按提交归档，并从该归档解出 Linux amd64 可执行文件，完成原生交互与进程重启读回。此提交的各平台 job 及产物可在[本次工作流](https://github.com/Cdners/S3S/actions/runs/45539977662)核对。后续提交的结果见[分支运行记录](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Fm0-desktop-foundation)。
+
+此次分支推送已通过。创建 PR 时，云端网络策略对 `api.github.com/graphql` 返回 Forbidden；PR 状态需在仓库中单独核对。四个平台的用户安装验收和签名发行属于 M4。
+
 ## 后续
 
 M1 接入 AWS/R2 及系统凭据存储，开发分页、上传下载、重试与远端分片核对；验证断网、退出、崩溃及重启后的真实传输恢复。M0 没有真实云请求、速率调度、测速或 R2 地址优化。此次没有创建发行标签、安装包或 GitHub Release。完整阶段边界见 [路线图](ROADMAP.md)。

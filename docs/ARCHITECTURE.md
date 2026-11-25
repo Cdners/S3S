@@ -24,7 +24,7 @@ Wails 3 在窗口中加载由 Vite 编译、Go `embed` 打包的静态文件。V
 | Vue、TypeScript | 3.5.46、6.0.3 | Vue 页面与类型检查。单独试用 TypeScript 7.0.2 时，vue-tsc 3.3.14 加载 TypeScript 的 lib/tsc 导出失败，因此固定兼容的 6.0.3。 |
 | Vite、plugin-vue、vue-tsc | 8.3.8、6.0.11、3.3.14 | `frontend/package.json` 固定直接版本；传递依赖及完整性摘要保存在 `frontend/package-lock.json`。 |
 
-版本可在 [Go 发布记录](https://go.dev/dl/)、[Wails v3 模块元数据](https://proxy.golang.org/github.com/wailsapp/wails/v3/@v/v3.1.0.mod)、[npm runtime 元数据](https://registry.npmjs.org/@wailsio/runtime/3.1.0) 核对。Wails v3.1.0 模块声明最低 Go 1.26.0。Linux 构建基于 GTK 4 与 WebKitGTK 6.0，Windows 使用原生编译器环境和 WebView2，macOS 使用 Xcode 工具链与系统 WebKit。具体安装与检查入口见 [README.md](../README.md)。
+版本可在 [Go 发布记录](https://go.dev/dl/)、[Wails v3 模块元数据](https://proxy.golang.org/github.com/wailsapp/wails/v3/@v/v3.1.0.mod)、[npm runtime 元数据](https://registry.npmjs.org/@wailsio/runtime/3.1.0) 核对。Wails v3.1.0 模块声明最低 Go 1.26.0。Vite 8.3.8 声明 Node.js ^20.19.0 或 >=22.12.0；本工程使用已验证的 Node 24.22.3。Linux 构建基于 GTK 4 与 WebKitGTK 6.0，Windows 使用原生编译器环境和 WebView2，macOS 使用 Xcode 工具链与系统 WebKit。具体安装与检查入口见 [README.md](../README.md)。
 
 ## 状态与持久化
 
