@@ -2,11 +2,12 @@
 import argparse
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 import pyatspi
 
@@ -56,17 +57,30 @@ def desktop(binary, profile):
         path = profile / variable
         path.mkdir(mode=0o700, exist_ok=True)
         env[variable] = str(path)
-    env.update(GDK_BACKEND='x11', GTK_A11Y='atspi', GSK_RENDERER='cairo', LIBGL_ALWAYS_SOFTWARE='1')
-    app = subprocess.Popen([binary], env=env)
+    env.update(GDK_BACKEND='x11', GTK_A11Y='atspi', GSK_RENDERER='cairo',
+               LIBGL_ALWAYS_SOFTWARE='1', MESA_SHADER_CACHE_DISABLE='true', GSETTINGS_BACKEND='memory')
+    # WebKit spawns network and renderer processes. Signal the entire isolated
+    # app group before reopening or removing this test's private profile.
+    app = subprocess.Popen([binary], env=env, start_new_session=True)
     try:
         yield
     finally:
-        app.terminate()
-        try:
+        with suppress(ProcessLookupError):
+            os.killpg(app.pid, signal.SIGTERM)
+        with suppress(subprocess.TimeoutExpired):
             app.wait(timeout=6)
-        except subprocess.TimeoutExpired:
-            app.kill()
-            app.wait()
+        with suppress(ProcessLookupError):
+            os.killpg(app.pid, signal.SIGKILL)
+        app.wait()
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                os.killpg(app.pid, 0)
+            except ProcessLookupError:
+                break
+            if time.monotonic() > deadline:
+                raise AssertionError('WebView process group survived teardown')
+            time.sleep(0.05)
 
 
 def verify(binary, locales, profile):

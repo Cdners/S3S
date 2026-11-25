@@ -20,6 +20,10 @@ func (w *Workspace) close() {
 	}
 	w.mu.Unlock()
 	w.wg.Wait()
+	// A pending OS keychain prompt may still be committing an explicit
+	// credential write. Finish it before another process can edit this profile.
+	w.profilesMu.Lock()
+	defer w.profilesMu.Unlock()
 	if w.store != nil {
 		w.store.Close()
 	}

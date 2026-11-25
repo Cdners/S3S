@@ -53,6 +53,7 @@ if [[ $# -gt 0 ]]; then
   install -m 0444 tests/ui/native.py tests/integration/desktop.py frontend/src/locales/{en-US,zh-CN}.json "$stage/fixture/"
   docker build -t s3s-keyring-integration:local -f tests/integration/Dockerfile.desktop tests/integration
   docker run "${sandbox[@]}" -e WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
-    -e XDG_CACHE_HOME=/tmp/cache s3s-keyring-integration:local \
-    xvfb-run -a -s '-screen 0 1440x900x24' dbus-run-session -- python3 /fixture/desktop.py
+    -e GSETTINGS_BACKEND=memory -e XDG_CACHE_HOME=/tmp/cache s3s-keyring-integration:local \
+    xvfb-run -a -s '-noreset -screen 0 1440x900x24' dbus-run-session -- \
+    sh -ec 'xdotool getdisplaygeometry >/dev/null; exec python3 /fixture/desktop.py'
 fi

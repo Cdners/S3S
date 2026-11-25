@@ -14,10 +14,14 @@
 ### 已执行的检查
 
 - **通过**：生产前端构建、TypeScript 和 7 项前端测试，包括翻译键/参数、游标循环和切换连接时过期请求的隔离。
-- **通过**：Linux 云机上的 Go 模块校验、vet、核心与数据层测试、实际 Linux 桌面编译。存储测试覆盖 M0 迁移、崩溃后重开、检查点冲突和异常文件处理。
+- **通过**：Linux 云机上的 Go 模块校验、vet、27 项 Go 测试和实际 Linux 桌面编译。存储测试覆盖 M0 迁移、崩溃后重开、检查点冲突和异常文件处理。
 - **通过**：独立 Moto HTTPS 服务使用本轮临时生成的数据与凭据，覆盖 AWS、R2 两种客户端配置、对象翻页、特殊 Key 及条件范围读取。下载 18 MiB + 319 字节对象，子进程在首个 8 MiB 检查点后退出。重开数据库后跳过已确认区间，最终文件 SHA-256 与种入服务前的摘要一致。
+- **通过**：Linux 真实 Wails/WebKit 窗口连接隔离的 Moto HTTPS 服务，并通过 GNOME Secret Service 保存临时凭据；结束进程并重开后列出桶及对象，使用 GTK 原生保存对话框下载，核对实际文件字节及已完成任务行。SQLite 文件检查未检出测试凭据。
+- **通过**：Go 竞态检测覆盖桌面桥接、凭据边界、SQLite 及下载引擎。浏览器和 Linux 原生无云账号的双语导航回归也已执行。
 - **未执行**：真实 AWS/R2 测试桶验收，当前实例未配置专用桶或测试身份。已提供带 `livecloud` 标签的只读验收入口，普通 CI 使用隔离测试服务。[厂商只读验收](../tests/live/README.md)
-- 分支对应的原生作业与产物见 [M1 的 Actions 记录](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Fm1-browse-download)。Windows/macOS 桌面交互、操作系统重启及实际厂商端到端续传仍需单独验收。
+- 实现提交 `720a931` 已触发[四平台工作流](https://github.com/Cdners/S3S/actions/runs/45593483338)。分支后续提交对应的原生作业与产物见 [M1 的 Actions 记录](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Fm1-browse-download)。Windows/macOS 桌面交互、操作系统重启及实际厂商端到端续传仍需单独验收。
+
+当前云实例的 GitHub GraphQL 请求返回 `Forbidden`。已推送开发分支；网络配置草稿中的 `api.github.com` 需在实例上生效后才能由此会话创建 PR。下一轮优先开发分片上传、已传分片的远端核对及取消清理，并使用专用测试桶执行厂商验收。
 
 ## M0 历史记录
 

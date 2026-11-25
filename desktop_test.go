@@ -137,6 +137,18 @@ func TestWorkspaceOwnsTransfersUntilShutdown(t *testing.T) {
 	if err != nil || state.State != core.Running {
 		t.Fatal("second opener interfered with active transfer")
 	}
+	if paused := w.PauseDownload(ctx, task.ID); paused.Error != nil || !paused.Data {
+		t.Fatal("pause did not join the worker")
+	}
+	source = &waitingSource{reading: make(chan struct{})}
+	if err := w.launch(ctx, task.ID, c, source); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-source.reading:
+	case <-time.After(10 * time.Second):
+		t.Fatal("paused range did not restart")
+	}
 	w.close()
 	next := openWorkspaceAt(dir)
 	if next.store == nil {

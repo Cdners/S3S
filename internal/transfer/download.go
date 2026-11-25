@@ -330,6 +330,10 @@ func (e *Engine) fetch(ctx context.Context, f *os.File, t core.Task, d store.Dow
 	hash := sha256.New()
 	out := io.MultiWriter(io.NewOffsetWriter(f, offset), hash)
 	if _, err = io.CopyN(out, body, length); err != nil {
+		var local *os.PathError
+		if errors.As(err, &local) {
+			return core.NewError(fileError)
+		}
 		return core.NewError(rangeError)
 	}
 	var extra [1]byte

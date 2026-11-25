@@ -33,7 +33,9 @@ bash scripts/cloud-linux.sh run bash scripts/build.sh
 
 ```bash
 stage=$(mktemp -d)
-tar -xzf "dist/s3s-linux-amd64-$(git rev-parse HEAD).tar.gz" -C "$stage"
+revision=$(git rev-parse HEAD)
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then revision="$revision-dirty"; fi
+tar -xzf "dist/s3s-linux-amd64-$revision.tar.gz" -C "$stage"
 bash tests/ui/linux-container.sh "$stage/S3S"
 ```
 

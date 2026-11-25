@@ -137,7 +137,14 @@ func (s *observedSource) ReadRange(ctx context.Context, bucket, key string, iden
 }
 
 func TestDownloadAfterProcessExit(t *testing.T) {
-	c, client, obj := fixture(t, core.AWS)
+	for _, provider := range []core.Provider{core.AWS, core.R2} {
+		t.Run(string(provider), func(t *testing.T) { verifyResume(t, provider) })
+	}
+}
+
+func verifyResume(t *testing.T, provider core.Provider) {
+	t.Helper()
+	c, client, obj := fixture(t, provider)
 	ctx := t.Context()
 	folder := os.Getenv("S3S_CRASH_FIXTURE")
 	if folder != "" {
@@ -157,7 +164,7 @@ func TestDownloadAfterProcessExit(t *testing.T) {
 		t.Fatalf("expected process exit before Run returned: %v", engine.Run(ctx, task.ID, c, source))
 	}
 	folder = t.TempDir()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestDownloadAfterProcessExit$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDownloadAfterProcessExit$/^"+string(provider)+"$")
 	cmd.Env = append(os.Environ(), "S3S_CRASH_FIXTURE="+folder)
 	out, err := cmd.CombinedOutput()
 	var exit *exec.ExitError
