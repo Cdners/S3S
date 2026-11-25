@@ -9,6 +9,7 @@
 | 前端与 Go | 前端锁文件安装、11 项 Node 测试、类型检查、生产构建通过。Go 模块校验、vet 和 58 项顶层测试通过。桌面桥接、密钥库与 S3 适配器通过断网竞态检测。 |
 | Chromium | 查看各服务填写示例，在已打开的 TOS 示例上切换语言，验证选项及区域保留。另用隔离接口模拟密钥写入失败，验证重试沿用同一账号 ID。在小窗口中检查账号保存按钮和空白凭据。 |
 | Linux 原生桌面 | 使用真实 Wails 窗口从同一表单添加 AWS 和 TOS 账号。核对本轮生成的测试密钥确实进入 GNOME Secret Service，编辑不回显原密钥。重开后使用 AWS 配置连接隔离服务，切换中英文后保持当前桶。扫描应用 SQLite 及 WebKit 持久化数据，未检出本轮测试密钥。TOS 在对象页显示云操作待接入。 |
+| 原生构建产物 | 应用提交 `9df57d4` 由 Windows amd64、Linux amd64、macOS arm64 和 macOS amd64 原生 runner 构建。GitHub 已列出带该提交完整 SHA 的四份开发归档及各自的 SHA-256 摘要。见[本次构建和下载项](https://github.com/Cdners/S3S/actions/runs/45625128901)。 |
 | 尚未执行 | 真实厂商租户验收、Windows 和 macOS 的原生窗口操作及系统密钥库交互。OSS、TOS、通用 S3 的桶浏览、上传和下载仍待接入。 |
 
 当前云实例访问 GitHub GraphQL 接口返回 `Forbidden`。按提交核对的原生构建及下载项见[账号改进分支的 Actions 记录](https://github.com/Cdners/S3S/actions?query=branch%3Afeat%2Faccount-setup-and-language)。[与 main 的差异及 PR 入口](https://github.com/Cdners/S3S/compare/main...feat/account-setup-and-language?expand=1)
