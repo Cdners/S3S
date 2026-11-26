@@ -18,6 +18,7 @@ fi
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 flags=(-mod=readonly -tags production -trimpath)
+python_bin=python3
 verify_binary() {
   local info
   info=$(go version -m "$1")
@@ -26,6 +27,7 @@ verify_binary() {
 }
 case "$platform" in
   windows)
+    python_bin=python
     go build "${flags[@]}" -ldflags="-H windowsgui" -o "$stage/S3S.exe" .
     verify_binary "$stage/S3S.exe"
     python -m zipfile -c "dist/$archive.zip" "$stage/S3S.exe"
@@ -48,3 +50,4 @@ case "$platform" in
     ;;
   *) echo "Unsupported platform: $platform" >&2; exit 1 ;;
 esac
+"$python_bin" scripts/check-archive.py "$platform" "dist/$archive".*

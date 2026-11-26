@@ -3,13 +3,15 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import sqlite3
 import subprocess
 import tempfile
 import time
 
-from native import desktop, lookup, press, visit
+from native import descendants, desktop, lookup, press, visit
+import pyatspi
 
 
 FIXTURE = Path('/fixture')
@@ -25,9 +27,18 @@ def enter(value):
                    input=value, text=True, check=True)
 
 
-def select_end(label):
-    lookup(label, 'combo box').queryComponent().grabFocus()
-    keys('End', 'Return')
+def fill_field(entry, value, protected=False):
+    # An AT-SPI focus change and the X input event can arrive on different
+    # WebKit event-loop turns. Verify before proceeding to the next field.
+    for _ in range(3):
+        entry.queryComponent().grabFocus()
+        keys('ctrl+a')
+        enter(value)
+        text = entry.queryText()
+        if (text.characterCount == len(value) if protected else text.getText(0, -1) == value):
+            return
+        time.sleep(.1)
+    raise AssertionError('An input did not receive the expected fixture value')
 
 
 def blank_secret(catalog, label):
@@ -43,8 +54,7 @@ def blank_secret(catalog, label):
 def fill_keys(catalog, credentials):
     for label, field in [('credentials.access', 'accessKeyId'), ('credentials.secret', 'secretAccessKey')]:
         entry = blank_secret(catalog, label)
-        entry.queryComponent().grabFocus()
-        enter(credentials[field])
+        fill_field(entry, credentials[field], protected=True)
 
 
 def check_keyring(root, name, expected):
@@ -92,6 +102,115 @@ def wait_completed_upload(en, object_name):
     raise AssertionError('The uploaded object did not reach Completed in Task center')
 
 
+def wait_probe(en, scope):
+    message = re.escape(en['probe.passed'].format(scope=scope, ms='TIMING')).replace('TIMING', r'[0-9,]+')
+    deadline = time.monotonic() + 12
+    while time.monotonic() < deadline:
+        try:
+            for node in descendants(pyatspi.Registry.getDesktop(0)):
+                if node.name and re.fullmatch(message, node.name):
+                    return
+                if 'Text' in node.get_interfaces() and re.fullmatch(message, node.queryText().getText(0, -1)):
+                    return
+        except (RuntimeError, LookupError):
+            pass
+        time.sleep(.1)
+    raise AssertionError(f'Missing successful read probe for {scope}')
+
+
+def verify_clipboard(expected):
+    # Read the X11 clipboard through a separate GTK client, independent of
+    # both the WebView's success notice and focus/keyboard timing.
+    import gi
+    gi.require_version('Gtk', '4.0')
+    gi.require_version('Gdk', '4.0')
+    from gi.repository import Gdk, GLib, Gtk
+    Gtk.init()
+    clipboard = Gdk.Display.get_default().get_clipboard()
+    loop = GLib.MainLoop()
+    result = []
+
+    def finished(source, task):
+        result.append(source.read_text_finish(task))
+        loop.quit()
+
+    clipboard.read_text_async(None, finished)
+    timeout = GLib.timeout_add_seconds(4, loop.quit)
+    loop.run()
+    if result:
+        GLib.source_remove(timeout)
+    if result != [expected]:
+        raise AssertionError('Native clipboard round trip changed the object key')
+
+
+def check_regional_workspace(root, en, provider, name, region, endpoint, bucket, credentials):
+    visit(en, 'connections')
+    press(en['connections.add'])
+    lookup(en['connections.add'], 'heading')
+    fill_field(lookup(en['connections.name'], 'entry'), name)
+    lookup(en['connections.provider'], 'combo box').queryComponent().grabFocus()
+    keys('Home', *(['Down'] * {'tos': 3, 'oss': 2}[provider]), 'Return')
+    lookup(en[f'account.guide.{provider}.origin'])
+    press(en['account.fillExample'])
+    for field, expected in [('connections.region', region), ('connections.endpoint', endpoint)]:
+        if lookup(en[field], 'entry').queryText().getText(0, -1) != expected:
+            raise AssertionError('The regional example filled an unexpected account scope')
+    fill_keys(en, credentials)
+    press(en['connections.save'])
+    lookup(en['connections.actionEdit'].format(name=name), 'button')
+    check_keyring(root, name, credentials)
+    press(en['connections.testNamed'].format(name=name))
+    if provider == 'tos':
+        lookup(en['error.providerCode'].format(value='AccessDenied'))
+        lookup(en['error.requestId'].format(value='isolated-tos-request'))
+    else:
+        wait_probe(en, en['probe.scopeAccount'].format(name=name))
+    press(en['connections.connectNamed'].format(name=name))
+    lookup(en['nav.objects'], 'heading')
+    if provider == 'tos':
+        lookup(en['error.requestId'].format(value='isolated-tos-request'))
+        lookup(en['objects.bucketName'], 'entry').queryComponent().grabFocus()
+        enter(bucket)
+    else:
+        press(bucket)
+    press(en['probe.testBucket'])
+    wait_probe(en, en['probe.scopeBucket'].format(bucket=bucket))
+    if provider == 'tos':
+        press(en['objects.openBucket'])
+    key = '项目 +%2F.txt'
+    lookup(key, 'table cell')
+    visit(en, 'tasks')
+    visit(en, 'objects')
+    lookup(bucket, 'heading')
+    lookup(key, 'table cell')
+    press(en['objects.details'])
+    lookup(en['objects.details'], 'heading')
+    body = b'Object metadata from the isolated provider fixture.\n'
+    etag = '"' + hashlib.md5(body, usedforsecurity=False).hexdigest() + '"'
+    lookup(etag)
+    press(en['objects.copyKey'])
+    lookup(en['objects.copied'])
+    verify_clipboard(key)
+    keys('Escape')
+
+
+def bandwidth(en, save):
+    visit(en, 'settings')
+    if save:
+        mode = lookup(en['bandwidth.mode'], 'combo box')
+        mode.queryComponent().grabFocus()
+        keys('Home', 'Down', 'Down', 'Return')
+    for field, number in [('bandwidth.upload', '8192.5'), ('bandwidth.download', '0')]:
+        control = lookup(en[field], 'entry')
+        if save:
+            fill_field(control, number)
+        elif control.queryText().getText(0, -1) != number:
+            raise AssertionError('The native speed setting did not survive process restart')
+    if save:
+        press(en['bandwidth.apply'])
+        lookup(en['bandwidth.saved'])
+
+
 def verify():
     zh, en = [json.loads((FIXTURE / f'{code}.json').read_text()) for code in ('zh-CN', 'en-US')]
     credentials = json.loads((FIXTURE / 'credentials.json').read_text())
@@ -113,10 +232,10 @@ def verify():
             lookup(en['nav.connections'], 'heading')
             press(en['connections.add'])
             lookup(en['connections.add'], 'heading')
-            enter(name)
+            fill_field(lookup(en['connections.name'], 'entry'), name)
             fill_keys(en, credentials)
             press(en['connections.save'])
-            lookup(name, 'table cell')
+            lookup(en['connections.actionEdit'].format(name=name), 'button')
             check_keyring(root, name, credentials)
             press(en['connections.actionEdit'].format(name=name))
             lookup(en['connections.edit'], 'heading')
@@ -125,15 +244,16 @@ def verify():
             # Save the existing account with empty secret fields. The same-scoped
             # keyring item must remain usable by the real backend after restart.
             press(en['connections.save'])
-            visit(en, 'objects')
-            select_end(en['objects.connection'])
-            press(en['objects.loadBuckets'])
+            press(en['connections.connectNamed'].format(name=name))
+            lookup(en['nav.objects'], 'heading')
             lookup(bucket, 'button')
+            bandwidth(en, save=True)
         with desktop(FIXTURE / 'S3S', root):
-            lookup(name, 'table cell')
-            visit(en, 'objects')
-            select_end(en['objects.connection'])
-            press(en['objects.loadBuckets'])
+            lookup(en['connections.actionEdit'].format(name=name), 'button')
+            bandwidth(en, save=False)
+            visit(en, 'connections')
+            press(en['connections.connectNamed'].format(name=name))
+            lookup(en['nav.objects'], 'heading')
             press(bucket)
             lookup('ui-proof.txt', 'table cell')
             press(zh['language.nativeName'], 'radio button')
@@ -169,30 +289,13 @@ def verify():
             press('Open')
             visit(en, 'tasks')
             wait_completed_upload(en, bucket + '/' + upload_key)
-            visit(en, 'connections')
-            press(en['connections.add'])
-            lookup(en['connections.add'], 'heading')
-            tos_name = 'TOS setup fixture'
-            enter(tos_name)
-            lookup(en['connections.provider'], 'combo box').queryComponent().grabFocus()
-            keys('Home', 'Down', 'Down', 'Down', 'Return')
-            lookup(en['account.planned'])
-            press(en['account.fillExample'])
-            for label, expected in [('connections.region', 'cn-beijing'),
-                                    ('connections.endpoint', 'https://tos-cn-beijing.volces.com')]:
-                if lookup(en[label], 'entry').queryText().getText(0, -1) != expected:
-                    raise AssertionError('The TOS example filled an unexpected account scope')
-            tos_keys = {'accessKeyId': secrets.token_hex(10).upper(), 'secretAccessKey': secrets.token_hex(32)}
-            fill_keys(en, tos_keys)
-            press(en['connections.save'])
-            lookup(tos_name, 'table cell')
-            check_keyring(root, tos_name, tos_keys)
-            visit(en, 'objects')
-            select_end(en['objects.connection'])
-            lookup(en['objects.unsupported'], 'heading')
-        check_storage(root, (credentials, tos_keys))
-    print('PASS single-form AWS/TOS accounts, protected edits and OS keyring, restart, storage scan, '
-          'live language switch in open bucket, native file pickers, verified transfers and pending TOS adapter')
+            check_regional_workspace(root,en,'tos','TOS Beijing','cn-beijing',
+                                     'https://tos-cn-beijing.volces.com','design-assets',credentials)
+            check_regional_workspace(root,en,'oss','OSS Hangzhou','cn-hangzhou',
+                                     'https://oss-cn-hangzhou.aliyuncs.com','project-archive',credentials)
+        check_storage(root,(credentials,))
+    print('PASS real AWS/TOS/OSS account actions, scoped reads, diagnostics, native metadata and clipboard, '
+          'selection across navigation, Linux keyring, storage scan, custom bandwidth after restart and native file transfers')
 
 
 if __name__ == '__main__':

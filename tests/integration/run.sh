@@ -14,8 +14,10 @@ trap cleanup EXIT
 mkdir -m 0755 "$stage/server" "$stage/fixture"
 aws=s3.us-east-1.amazonaws.com
 r2=00000000000000000000000000000000.r2.cloudflarestorage.com
+tos=tos-cn-beijing.volces.com
+oss=oss-cn-hangzhou.aliyuncs.com
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=s3s-integration' \
-  -addext "subjectAltName=DNS:$aws,DNS:$r2" -keyout "$stage/server/server.key" \
+  -addext "subjectAltName=DNS:$aws,DNS:$r2,DNS:$tos,DNS:design-assets.$tos,DNS:$oss,DNS:project-archive.$oss" -keyout "$stage/server/server.key" \
   -out "$stage/fixture/server.crt" 2>/dev/null
 python3 - "$stage/fixture/credentials.json" <<'PY'
 import json, secrets, sys
@@ -24,12 +26,16 @@ Path(sys.argv[1]).write_text(json.dumps({'accessKeyId': secrets.token_hex(10).up
                                          'secretAccessKey': secrets.token_hex(32)}))
 PY
 chmod 0444 "$stage/fixture/"*
-# Both provider hostnames point at loopback only inside this offline namespace.
+install -m 0444 tests/integration/provider_server.py "$stage/server/"
+# Provider service and bucket hostnames point at two distinct loopback listeners.
 service=$(docker run --init -d --network none --read-only --tmpfs /tmp \
   --add-host "$aws:127.0.0.1" --add-host "$r2:127.0.0.1" \
+  --add-host "$tos:127.0.0.2" --add-host "design-assets.$tos:127.0.0.2" \
+  --add-host "$oss:127.0.0.2" --add-host "project-archive.$oss:127.0.0.2" \
   --security-opt=no-new-privileges -e S3_IGNORE_SUBDOMAIN_BUCKETNAME=true -e NO_PROXY='*' \
   -v "$stage/server:/cert:ro" -v "$stage/fixture:/fixture:ro" \
-  "$moto" -p 443 -c /fixture/server.crt -k /cert/server.key)
+  "$moto" -H 127.0.0.1 -p 443 -c /fixture/server.crt -k /cert/server.key)
+docker exec -d "$service" python /cert/provider_server.py
 docker exec -i "$service" python - < tests/integration/seed.py > "$stage/fixture/object.json"
 chmod 0444 "$stage/fixture/object.json"
 # Build separately; the process running the test binary has no registry or cloud access.

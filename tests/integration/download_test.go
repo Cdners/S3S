@@ -40,12 +40,8 @@ func readJSON(t *testing.T, path string, dest any) {
 	}
 }
 
-func fixture(t *testing.T, provider core.Provider) (core.Connection, *s3client.Client, fixtureObject) {
+func requireLoopback(t *testing.T, host string) {
 	t.Helper()
-	host, region := "s3.us-east-1.amazonaws.com", "us-east-1"
-	if provider == core.R2 {
-		host, region = "00000000000000000000000000000000.r2.cloudflarestorage.com", "auto"
-	}
 	addrs, err := net.LookupIP(host)
 	if err != nil || len(addrs) == 0 {
 		t.Fatal("missing offline test hostname")
@@ -55,6 +51,15 @@ func fixture(t *testing.T, provider core.Provider) (core.Connection, *s3client.C
 			t.Fatal("endpoint must be loopback")
 		}
 	}
+}
+
+func fixture(t *testing.T, provider core.Provider) (core.Connection, *s3client.Client, fixtureObject) {
+	t.Helper()
+	host, region := "s3.us-east-1.amazonaws.com", "us-east-1"
+	if provider == core.R2 {
+		host, region = "00000000000000000000000000000000.r2.cloudflarestorage.com", "auto"
+	}
+	requireLoopback(t, host)
 	c := core.Connection{ID: string(provider), Name: "Fixture", Provider: provider, Region: region, Endpoint: "https://" + host}
 	var keys struct{ AccessKeyID, SecretAccessKey string }
 	readJSON(t, "/fixture/credentials.json", &keys)
