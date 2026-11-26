@@ -21,3 +21,6 @@
 在仓库根目录运行 `bash scripts/cloud-linux.sh setup`。执行 `export npm_config_cache=/workspace/.s3s-tools/npm-cache` 后运行 `bash scripts/check.sh frontend`、`bash scripts/cloud-linux.sh run bash scripts/check.sh go` 和 `bash scripts/cloud-linux.sh run bash scripts/build.sh`。原生 runner 的等价命令为 `bash scripts/check.sh` 和 `bash scripts/build.sh`，Linux 先执行 `bash scripts/setup-linux.sh`。
 
 修改 AWS/R2 传输或恢复时，额外运行 `bash tests/integration/run.sh`，并在云端运行 `bash scripts/cloud-linux.sh run go test -race -mod=readonly -count=1 ./...`。验证桌面文件选择器时，将本次提交构建归档解出的 Linux 可执行文件路径作为集成脚本的第一个参数。验证语言和桌面工作区时，运行 `python3 tests/ui/preview.py` 和 `bash tests/ui/linux-container.sh /path/to/S3S`。隔离测试服务、原生窗口和真实厂商桶各自记录结果。
+
+
+更改账号连接、对象操作或界面布局时，运行双语 Chromium 检查与 Linux 原生交互检查。浏览器检查包含 760×560、1024×768、1200×800 三档；原生检查使用 TLS 隔离服务测试获准与被拒绝的请求。变更厂商读取或限速时，还需运行竞态检查和 `bash tests/integration/run.sh`。打包时保持 Windows ZIP 根目录只有 `S3S.exe`，用 `scripts/check-archive.py` 核对文件，Actions 上传单个成品时使用 `archive: false`。

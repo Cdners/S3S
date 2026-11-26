@@ -9,12 +9,12 @@ GitHub Actions 提供按提交区分的开发构建。所有目标分支的普�
 
 | 平台 | runner 标签 | 目标架构 | 内容 |
 | --- | --- | --- | --- |
-| Windows | `windows-2025` | amd64 | 含桌面程序的 ZIP |
-| Linux | `ubuntu-24.04` | amd64 | 含桌面程序的 tar.gz |
-| macOS | `macos-26` | arm64 | 含 .app 的 tar.gz |
-| macOS | `macos-26-intel` | amd64 | 含 .app 的 tar.gz |
+| Windows | `windows-2025` | amd64 | ZIP 根目录只有 `S3S.exe` |
+| Linux | `ubuntu-24.04` | amd64 | tar.gz 根目录为 `S3S` |
+| macOS | `macos-26` | arm64 | tar.gz 根目录为 `S3S.app` |
+| macOS | `macos-26-intel` | amd64 | tar.gz 根目录为 `S3S.app` |
 
-3. 在该次运行的 Artifacts 区域下载 `s3s-<GOOS>-<GOARCH>-<完整 SHA>`。Actions 对下载项可能额外包一层 ZIP；解开后使用内部归档。Linux 与 macOS 使用支持文件权限的解压工具。
+3. 在该次运行的 Artifacts 区域下载 `s3s-<GOOS>-<GOARCH>-<完整 SHA>.zip`（Windows）或同名的 `.tar.gz`（Linux、macOS）。Windows 解压一次后双击 `S3S.exe`。Linux 与 macOS 解开 tar 时保留执行权限。原生 job 先检查可执行文件架构，再检查归档的根目录与内容。上传步骤对单个已打包文件设置 `archive: false`，保留上述文件名及字节。
 4. 记录下载项、归档内部路径和二进制架构，并另行记录桌面启动与交互测试的系统版本。macOS 应用以 15.0 为部署目标，开发构建使用 ad-hoc 本地签名。Developer ID 签名与公证在 M4 执行。Linux 动态链接依赖、Windows WebView2 和 macOS 最低支持版本须在声明支持的实际目标上验收。
 
 GitHub 托管 runner 清单及镜像变动见 [GitHub Docs](https://github.com/github/docs/blob/main/data/reusables/actions/supported-github-runners.md) 和 [runner-images](https://github.com/actions/runner-images)。
