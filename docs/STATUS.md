@@ -19,7 +19,18 @@
 - **执行通过**。Chromium 在 760×560、1024×768、1200×800 分别检查简中和英文账号行操作、表格与工具栏边界。真实 Linux Wails 窗口使用系统密钥库连接隔离服务，覆盖账号连接、单桶授权、详情、复制原始 Key、系统文件对话框和重启。在 GTK 的 760×560 英文窗口里，原版“编辑”换到第二行；修复后三个按钮的纵坐标均为 283，右缘为 715。新增的原生回归在中英两种语言测量三档实际窗口，旧程序触发断言，新程序六组均通过。原生窗口还验证了自定义上传 8192.5 KiB/s、下载不限速在重启后仍然生效。[原生窗口截图](images/oss-browser.png)
 - **未执行**。四家真实租户的权限、性能和恢复验收，Windows/macOS 原生桌面交互，以及签名安装包的安装验收。开发构建无发布标签。OSS/TOS/通用 S3 的写入、远端复制删除、真实上传测速、R2 选路及完整重试诊断仍在路线图中。
 
-[按提交查看构建和下载项](https://github.com/Cdners/S3S/actions/workflows/desktop.yml?query=branch%3Afeat%2Faccount-setup-and-language) · [测试方法](TESTING.md) · [下载说明](RELEASING.md)
+### 已核对的开发构建
+
+应用提交 `1645d6c0f8a37d44e6521e74a5da18d4b78a3c7d` 的推送检查和 PR 合并预检均为 4/4 通过。四份开发包均已在 Actions 列出，上传步骤核对的 SHA-256 与打包文件一致。下载 Actions 产物需要登录 GitHub。[提交构建](https://github.com/Cdners/S3S/actions/runs/45760552261) · [PR 预检](https://github.com/Cdners/S3S/actions/runs/45760558406)
+
+| 平台 | 结果与下载 | 解开一次后的内容 |
+| --- | --- | --- |
+| Windows amd64 | [通过 · ZIP](https://github.com/Cdners/S3S/actions/runs/45760552261/artifacts/15089034862) | `S3S.exe` |
+| Linux amd64 | [通过 · tar.gz](https://github.com/Cdners/S3S/actions/runs/45760552261/artifacts/15089747774) | `S3S` |
+| macOS Apple Silicon | [通过 · tar.gz](https://github.com/Cdners/S3S/actions/runs/45760552261/artifacts/15089318211) | `S3S.app` |
+| macOS Intel | [通过 · tar.gz](https://github.com/Cdners/S3S/actions/runs/45760552261/artifacts/15089893269) | `S3S.app` |
+
+Windows ZIP 的 SHA-256 为 `3198d501b0f68990505cc1fe98c8b998155b528b8ccf2e1a9105d7b4cfd90ae2`。当前云机从 GitHub API 二次下载该 ZIP 返回 `Forbidden`。归档内容和上传字节的一致性由 Windows 原生 job 检查；云机独立打开和操作了从本地当次归档解出的 Linux 程序。[测试方法](TESTING.md) · [下载说明](RELEASING.md)
 
 ## 历史 · 账号填写示例、凭据与语言切换
 
