@@ -74,4 +74,4 @@ bash scripts/cloud-linux.sh run bash scripts/build.sh
 
 基准可另行记录 rclone 版本、同桶同源样本、并发数与网络条件。性能对比独立于 S3S 的恢复正确性与数据一致性证明。
 
-Linux 原生 CI 会先编译带 `s3integration` 标签的测试程序，再通过 `S3S_INTEGRATION_BINARY` 运行隔离的 Moto 协议和恢复测试。PR 流程不使用厂商账号。
+Linux 原生 CI 会从当次打包归档解出程序，在 Xvfb 和 WebKitGTK 下实测两种语言、三种窗口尺寸的操作按钮坐标。随后编译带 `s3integration` 标签的测试程序，通过 `S3S_INTEGRATION_BINARY` 运行隔离的 Moto、TOS/OSS 签名服务和系统密钥库桌面测试。普通 PR 不需厂商账号。

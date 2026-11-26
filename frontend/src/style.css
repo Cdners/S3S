@@ -169,7 +169,7 @@ td .cloud-error { margin:6px 0; min-width:120px; font-size:12px; }
 .account-toolbar .filter select { max-width:185px; }
 .accounts-table { table-layout:fixed; }
 .accounts-table th:first-child { width:24%; }
-.accounts-table th:last-child { width:300px; }
+.accounts-table th:last-child { width:324px; }
 .account-name { font-weight:650; }
 .accounts-table .service-info small { display:block; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-top:5px; }
 .service-region { margin-inline-start:6px; font-size:12px; color:var(--muted); }

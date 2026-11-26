@@ -61,14 +61,18 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/s3s-ui"
           "$RUNNER_TEMP/s3s-ui/bin/python" -m pip install playwright==1.62.0
           "$RUNNER_TEMP/s3s-ui/bin/python" tests/ui/preview.py
-      - name: Verify S3 listing and recoverable transfers against an isolated service
-        if: runner.os == 'Linux'
-        run: |
-          export S3S_INTEGRATION_BINARY="$RUNNER_TEMP/s3s-integration"
-          go test -mod=readonly -tags=s3integration -c -o "$S3S_INTEGRATION_BINARY" ./tests/integration
-          bash tests/integration/run.sh
       - name: Build native desktop archive
         run: bash scripts/build.sh
+      - name: Exercise the packaged Linux desktop and isolated storage services
+        if: runner.os == 'Linux'
+        run: |
+          stage=$(mktemp -d)
+          tar -xzf "dist/s3s-linux-amd64-$GITHUB_SHA.tar.gz" -C "$stage"
+          docker build -t s3s-m0-linux:local -f scripts/Dockerfile.linux scripts
+          bash tests/ui/linux-container.sh "$stage/S3S"
+          export S3S_INTEGRATION_BINARY="$RUNNER_TEMP/s3s-integration"
+          go test -mod=readonly -tags=s3integration -c -o "$S3S_INTEGRATION_BINARY" ./tests/integration
+          bash tests/integration/run.sh "$stage/S3S"
       - name: Upload desktop build
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

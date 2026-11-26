@@ -82,6 +82,31 @@ def desktop(binary, profile):
             time.sleep(0.05)
 
 
+def check_action_layout(name, locales):
+    # GTK/WebKit and Chromium use different native font metrics. Read the
+    # actual rendered button rectangles after resizing the real X11 window.
+    window = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^S3S$']).splitlines()[-1]
+    for width, height in [(760, 560), (1024, 768), (1200, 800)]:
+        subprocess.run(['xdotool', 'windowmove', window, '0', '0', 'windowsize', '--sync', window,
+                        str(width), str(height)], check=True, timeout=8)
+        for catalog in locales:
+            press(catalog['language.nativeName'], 'radio button')
+            lookup(catalog['nav.connections'], 'heading')
+            buttons = [lookup(catalog[key].format(name=name), 'button') for key in
+                       ('connections.connectNamed', 'connections.testNamed', 'connections.actionEdit')]
+            deadline = time.monotonic() + 3
+            while True:
+                boxes = [button.queryComponent().getExtents(pyatspi.DESKTOP_COORDS) for button in buttons]
+                visible = all(w > 0 and h > 0 and 0 <= x <= width-w and 0 <= y <= height-h for x,y,w,h in boxes)
+                centers = [y + h/2 for _,y,_,h in boxes]
+                separate = all(a[0] + a[2] <= b[0] for a,b in zip(boxes, boxes[1:]))
+                if visible and separate and max(centers) - min(centers) <= 1:
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(f'Misaligned account actions at {width}×{height}: {boxes}')
+                time.sleep(.05)
+
+
 def verify(binary, locales, profile):
     zh, en = [json.loads((locales / f'{code}.json').read_text(encoding='utf-8'))
               for code in ('zh-CN', 'en-US')]
@@ -98,6 +123,7 @@ def verify(binary, locales, profile):
         subprocess.run(['xdotool', 'type', '--clearmodifiers', name], check=True)
         press(en['connections.save'])
         lookup(en['connections.actionEdit'].format(name=name), 'button')
+        check_action_layout(name, [zh, en])
         visit(en, 'objects')
         lookup(en['objects.empty'], 'heading')
         visit(en, 'tasks')
@@ -105,7 +131,7 @@ def verify(binary, locales, profile):
     with desktop(binary, profile):
         lookup(en['nav.connections'], 'heading')
         lookup(en['connections.actionEdit'].format(name=name), 'button')
-    print('PASS Linux desktop navigation, live language switch, profile save and persistence after restart')
+    print('PASS Linux desktop navigation, six bilingual layout checks, profile save and persistence after restart')
 
 
 if __name__ == '__main__':
