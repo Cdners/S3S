@@ -45,19 +45,25 @@ func (c Connection) Validate() error {
 }
 
 type Capabilities struct {
+	Metadata    bool `json:"metadata"`
 	ListBuckets bool `json:"listBuckets"`
 	ListObjects bool `json:"listObjects"`
 	Upload      bool `json:"upload"`
 	Download    bool `json:"download"`
-	ResumeParts bool `json:"resumeParts"`
+	ResumeParts bool `json:"resumeParts"` // Durable checkpoints for the supported transfer directions.
 }
 
 // CapabilitiesFor reports only operations backed by a working adapter.
 func CapabilitiesFor(provider Provider) Capabilities {
-	if provider == AWS || provider == R2 {
-		return Capabilities{ListBuckets: true, ListObjects: true, Upload: true, Download: true, ResumeParts: true}
+	switch provider {
+	case AWS, R2, OSS, TOS, S3Compatible:
+		return Capabilities{
+			ListBuckets: true, ListObjects: true, Metadata: true, Download: true, ResumeParts: true,
+			Upload: provider == AWS || provider == R2,
+		}
+	default:
+		return Capabilities{}
 	}
-	return Capabilities{}
 }
 
 type SpeedMode string
@@ -69,7 +75,7 @@ const (
 )
 
 // TransferOptions describes application-wide byte/s budgets shared by all transfers.
-// Zero means unlimited. M0 stores no active scheduler or limiter.
+// Zero means unlimited. The HTTP body limiter enforces these shared budgets.
 type TransferOptions struct {
 	Mode                   SpeedMode `json:"mode"`
 	UploadBytesPerSecond   int64     `json:"uploadBytesPerSecond"`

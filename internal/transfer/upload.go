@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/Cdners/S3S/internal/bandwidth"
 	"github.com/Cdners/S3S/internal/core"
 	"github.com/Cdners/S3S/internal/store"
 )
@@ -254,7 +255,7 @@ func (w *uploadWorker) send(ctx context.Context, src *localSource, digests []str
 		}
 		if !skip {
 			p = core.Part{Number: n, Offset: offset, Size: length, Checksum: snap.sha}
-			p.ETag, err = w.dest.UploadPart(ctx, w.t.Bucket, w.t.ObjectKey, w.t.UploadID, n, snap.body, length, snap.md5)
+			p.ETag, err = w.dest.UploadPart(bandwidth.WithPayload(ctx, core.Upload), w.t.Bucket, w.t.ObjectKey, w.t.UploadID, n, snap.body, length, snap.md5)
 			snap.close()
 			if err != nil {
 				return err
@@ -341,7 +342,7 @@ func (w *uploadWorker) resumeCommit(ctx context.Context) error {
 	return w.commit(ctx, parts)
 }
 func (w *uploadWorker) putEmpty(ctx context.Context, firstAttempt bool) error {
-	err := w.dest.PutEmpty(ctx, w.t.Bucket, w.t.ObjectKey, w.t.ID, w.u.SHA256)
+	err := w.dest.PutEmpty(bandwidth.WithPayload(ctx, core.Upload), w.t.Bucket, w.t.ObjectKey, w.t.ID, w.u.SHA256)
 	if firstAttempt && (definiteRejection(err) || hasCode(err, objectExists) || hasCode(err, core.Conflict)) {
 		// A rejected initial PUT did not publish. Preserve this fact even if
 		// Cancel raced its response. A rejected retry cannot fence older PUTs.

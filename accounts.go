@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 
 	"github.com/Cdners/S3S/internal/core"
-	"github.com/Cdners/S3S/internal/s3client"
 	"github.com/Cdners/S3S/internal/vault"
 )
 
@@ -25,18 +24,17 @@ func (w *Workspace) currentProfile(ctx context.Context, expected core.Connection
 	return current, nil
 }
 
-func (w *Workspace) validateCredentials(c core.Connection, input vault.Credentials) error {
+func validateCredentials(c core.Connection, input vault.Credentials) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
 	if err := input.Validate(); err != nil {
 		return err
 	}
-	if c.Provider == core.AWS || c.Provider == core.R2 {
-		// Construction validates the adapter's signing origin locally.
-		_, err := s3client.NewWithTransport(c, sdkCredentials(input), w.storageTransport)
-		return err
-	}
-	// Other known providers can store a scoped credential before their cloud
-	// adapter is available. Connection.Validate rejects unknown providers.
-	return c.Validate()
+	// Construction validates the provider's signing origin without making a
+	// network request. Secret storage is allowed only for that exact scope.
+	_, err := newCloudClient(c, input, nil)
+	return err
 }
 
 // SaveAccount updates public metadata and optionally registers a write-only
@@ -67,7 +65,7 @@ func (w *Workspace) SaveAccount(ctx context.Context, previous *core.Connection, 
 	}
 	replace := input != nil && !input.Empty()
 	if replace {
-		if err := w.validateCredentials(changes, *input); err != nil {
+		if err := validateCredentials(changes, *input); err != nil {
 			return failure[*core.Connection](err, "error.invalidCredentials")
 		}
 	}
@@ -90,7 +88,7 @@ func (w *Workspace) SetCredentials(ctx context.Context, expected core.Connection
 	defer w.profilesMu.Unlock()
 	c, err := w.currentProfile(ctx, expected)
 	if err == nil {
-		err = w.validateCredentials(c, input)
+		err = validateCredentials(c, input)
 	}
 	if err == nil {
 		err = (vault.Vault{}).Save(c, input)

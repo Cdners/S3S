@@ -17,6 +17,9 @@ func (w *Workspace) StartDownload(ctx context.Context, c core.Connection, bucket
 	if w.store == nil || w.engine == nil {
 		return failure[string](nil, w.unavailable())
 	}
+	if !core.CapabilitiesFor(c.Provider).Download {
+		return failure[string](nil, "error.cloudProvider")
+	}
 	if w.chooseDestination == nil {
 		return failure[string](nil, "error.dialog")
 	}
@@ -61,6 +64,9 @@ func (w *Workspace) ResumeDownload(ctx context.Context, id string) response[bool
 	c, err := w.store.Connection(ctx, t.ConnectionID)
 	if err != nil {
 		return failure[bool](err, core.Storage)
+	}
+	if !core.CapabilitiesFor(c.Provider).Download {
+		return failure[bool](nil, "error.cloudProvider")
 	}
 	d, err := w.store.Download(ctx, id)
 	if err != nil {

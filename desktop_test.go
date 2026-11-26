@@ -83,7 +83,7 @@ func TestCancelSaveDialogCreatesNoTask(t *testing.T) {
 		}
 		return "", nil
 	}
-	result := w.StartDownload(context.Background(), core.Connection{}, "bucket", "../../private", "title")
+	result := w.StartDownload(context.Background(), core.Connection{Provider: core.AWS}, "bucket", "../../private", "title")
 	if result.Error != nil || result.Data != "" {
 		t.Fatal("unexpected canceled result")
 	}

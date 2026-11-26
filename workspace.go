@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/Cdners/S3S/internal/bandwidth"
 	"github.com/Cdners/S3S/internal/core"
 	"github.com/Cdners/S3S/internal/store"
 	"github.com/Cdners/S3S/internal/transfer"
@@ -22,6 +23,8 @@ type Workspace struct {
 	store             *store.Store
 	lock              *flock.Flock
 	engine            *transfer.Engine
+	limiter           *bandwidth.Limiter
+	optionsMu         sync.Mutex
 	storageTransport  http.RoundTripper
 	chooseSource      func(string) (string, error)
 	chooseDestination func(string) (string, error)

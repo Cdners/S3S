@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,11 +20,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-type Credentials struct {
-	AccessKeyID     string `json:"-"`
-	SecretAccessKey string `json:"-"`
-	SessionToken    string `json:"-"`
-}
+type Credentials = core.CloudCredentials
 
 type Client struct {
 	api      *s3.Client
@@ -39,11 +36,13 @@ var (
 		t.ResponseHeaderTimeout = 3 * time.Minute
 		return t
 	}()
-	regionName   = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
-	r2Host       = regexp.MustCompile(`^[a-f0-9]{32}(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$`)
-	bucketName   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,253}$`)
-	providerCode = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
-	requestID    = regexp.MustCompile(`^[a-zA-Z0-9._/+=-]{1,128}$`)
+	readOnlyMethod = errors.New("generic S3 endpoint is read-only")
+	signingRegion  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+	regionName     = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
+	r2Host         = regexp.MustCompile(`^[a-f0-9]{32}(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$`)
+	bucketName     = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,253}$`)
+	providerCode   = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
+	requestID      = regexp.MustCompile(`^[a-zA-Z0-9._/+=-]{1,128}$`)
 )
 
 func New(c core.Connection, creds Credentials) (*Client, error) {
@@ -57,7 +56,7 @@ func NewWithTransport(c core.Connection, creds Credentials, transport http.Round
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	if c.Provider != core.AWS && c.Provider != core.R2 {
+	if c.Provider != core.AWS && c.Provider != core.R2 && c.Provider != core.S3Compatible {
 		return nil, core.NewError("error.cloudProvider")
 	}
 	if strings.TrimSpace(creds.AccessKeyID) == "" || strings.TrimSpace(creds.SecretAccessKey) == "" {
@@ -65,8 +64,30 @@ func NewWithTransport(c core.Connection, creds Credentials, transport http.Round
 	}
 
 	region := c.Region
-	endpoint := strings.TrimSuffix(c.Endpoint, "/")
-	if c.Provider == core.AWS {
+	endpoint := ""
+	if c.Endpoint != "" {
+		u, err := url.Parse(c.Endpoint)
+		if err != nil || u.Scheme != "https" || strings.HasSuffix(u.Host, ":") {
+			return nil, core.NewError(core.InvalidConnection)
+		}
+		if port := u.Port(); port != "" {
+			n, err := strconv.ParseUint(port, 10, 16)
+			if err != nil || n == 0 {
+				return nil, core.NewError(core.InvalidConnection)
+			}
+		}
+		// Both the SDK resolver and the origin guard use this canonical origin.
+		// A scoped IPv6 address can contain a case-sensitive interface name.
+		if !strings.Contains(u.Host, "%") {
+			u.Host = strings.ToLower(u.Host)
+		}
+		u.Host = strings.TrimSuffix(u.Host, ":443")
+		u.Path = ""
+		u.RawPath = ""
+		endpoint = u.String()
+	}
+	switch c.Provider {
+	case core.AWS:
 		if region == "" {
 			region = "us-east-1"
 		}
@@ -84,12 +105,22 @@ func NewWithTransport(c core.Connection, creds Credentials, transport http.Round
 		if endpoint != regional && !(region == "us-east-1" && endpoint == "https://s3.amazonaws.com") {
 			return nil, core.NewError(core.InvalidConnection)
 		}
-	} else {
+	case core.R2:
 		u, err := url.Parse(endpoint)
 		if err != nil || u.Scheme != "https" || !r2Host.MatchString(u.Host) {
 			return nil, core.NewError(core.InvalidConnection)
 		}
 		region = "auto"
+	case core.S3Compatible:
+		if endpoint == "" {
+			return nil, core.NewError(core.InvalidConnection)
+		}
+		if region == "" {
+			region = "us-east-1"
+		}
+		if !signingRegion.MatchString(region) {
+			return nil, core.NewError(core.InvalidConnection)
+		}
 	}
 	if transport == nil {
 		transport = storageTransport
@@ -100,20 +131,24 @@ func NewWithTransport(c core.Connection, creds Credentials, transport http.Round
 // Reject a signed request if SDK endpoint resolution ever leaves this connection's
 // origin (for example, an access point ARN or a redirect).
 type originTransport struct {
-	origin string
-	base   http.RoundTripper
+	origin   string
+	base     http.RoundTripper
+	readOnly bool
 }
 
 func (t originTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Scheme+"://"+req.URL.Host != t.origin {
+	if req.URL.Scheme+"://"+req.URL.Host != t.origin || req.Host != "" && req.Host != req.URL.Host {
 		return nil, errors.New("unexpected storage origin")
+	}
+	if t.readOnly && req.Method != http.MethodGet && req.Method != http.MethodHead {
+		return nil, readOnlyMethod
 	}
 	return t.base.RoundTrip(req)
 }
 
 func newClient(provider core.Provider, region, endpoint string, creds Credentials, transport http.RoundTripper) *Client {
 	metadataHTTP := &http.Client{
-		Transport:     originTransport{endpoint, transport},
+		Transport:     originTransport{origin: endpoint, base: transport, readOnly: provider == core.S3Compatible},
 		Timeout:       3 * time.Minute,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
@@ -131,6 +166,9 @@ func newClient(provider core.Provider, region, endpoint string, creds Credential
 }
 
 func cloudError(err error) *core.Error {
+	if errors.Is(err, readOnlyMethod) {
+		return core.NewError("error.cloudProvider")
+	}
 	result := core.NewError("error.cloudRequest")
 	if errors.Is(err, context.Canceled) {
 		return result

@@ -13,6 +13,9 @@ func (w *Workspace) StartUpload(ctx context.Context, c core.Connection, bucket, 
 	if w.store == nil || w.engine == nil {
 		return failure[string](nil, w.unavailable())
 	}
+	if !core.CapabilitiesFor(c.Provider).Upload {
+		return failure[string](nil, "error.cloudProvider")
+	}
 	if bucket == "" || key == "" {
 		return failure[string](nil, core.InvalidTask)
 	}
@@ -26,7 +29,7 @@ func (w *Workspace) StartUpload(ctx context.Context, c core.Connection, bucket, 
 	if path == "" {
 		return response[string]{Data: ""}
 	}
-	client, err := w.client(ctx, c)
+	client, err := w.destination(ctx, c)
 	if err != nil {
 		return failure[string](err, "error.cloudRequest")
 	}
@@ -89,7 +92,7 @@ func (w *Workspace) resumeUpload(ctx context.Context, id string, cleanup bool) r
 		if connection.Provider != u.Provider || connection.Region != u.Region || connection.Endpoint != u.Endpoint {
 			return failure[bool](nil, "error.connectionChanged")
 		}
-		dest, err = w.client(ctx, connection)
+		dest, err = w.destination(ctx, connection)
 		if err != nil {
 			return failure[bool](err, "error.cloudRequest")
 		}

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Cdners/S3S/internal/bandwidth"
 	"github.com/Cdners/S3S/internal/core"
 	"github.com/Cdners/S3S/internal/store"
 )
@@ -325,7 +326,7 @@ func matchesFile(f *os.File, p core.Part) bool {
 }
 
 func (e *Engine) fetch(ctx context.Context, f *os.File, t core.Task, d store.Download, number int, offset, length int64, source Source) error {
-	body, err := source.ReadRange(ctx, t.Bucket, t.ObjectKey, d.Identity, offset, length)
+	body, err := source.ReadRange(bandwidth.WithPayload(ctx, core.Download), t.Bucket, t.ObjectKey, d.Identity, offset, length)
 	if err != nil {
 		return err
 	}

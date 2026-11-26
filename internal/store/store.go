@@ -26,6 +26,9 @@ var schema2 string
 //go:embed migrations/003.sql
 var schema3 string
 
+//go:embed migrations/004.sql
+var schema4 string
+
 type Store struct{ db *sql.DB }
 
 func Open(path string) (*Store, error) {
@@ -67,7 +70,7 @@ func migrate(db *sql.DB) error {
 	if err := tx.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	migrations := []string{schema1, schema2, schema3}
+	migrations := []string{schema1, schema2, schema3, schema4}
 	if version < 0 || version > len(migrations) {
 		return errors.New("unsupported S3S database schema version")
 	}

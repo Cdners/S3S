@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/Cdners/S3S/internal/core"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,22 +14,9 @@ import (
 
 const pageSize = 100
 
-type BucketPage struct {
-	Buckets   []string `json:"buckets"`
-	NextToken string   `json:"nextToken"`
-}
-
-type Object struct {
-	Key  string `json:"key"`
-	Size int64  `json:"size"`
-	ETag string `json:"etag"`
-}
-
-type ObjectPage struct {
-	Objects   []Object `json:"objects"`
-	Prefixes  []string `json:"prefixes"`
-	NextToken string   `json:"nextToken"`
-}
+type BucketPage = core.BucketPage
+type Object = core.Object
+type ObjectPage = core.ObjectPage
 
 func optional(s string) *string {
 	if s == "" {
@@ -39,7 +27,14 @@ func optional(s string) *string {
 
 func (c *Client) ListBuckets(ctx context.Context, token string) (BucketPage, error) {
 	in := &s3.ListBucketsInput{}
-	if c.provider == core.AWS {
+	// Older S3 services return a complete bucket list. An implementation
+	// that returns a continuation token gets it back verbatim on the next call.
+	// A colon cannot occur in a bucket name, keeping local cursors distinct.
+	const remotePrefix = "cursor:"
+	remote, isRemote := strings.CutPrefix(token, remotePrefix)
+	if c.provider == core.S3Compatible && isRemote {
+		in.ContinuationToken = aws.String(remote)
+	} else if c.provider == core.AWS {
 		in.MaxBuckets = aws.Int32(pageSize)
 		in.ContinuationToken = optional(token)
 	}
@@ -54,8 +49,12 @@ func (c *Client) ListBuckets(ctx context.Context, token string) (BucketPage, err
 		}
 		page.Buckets = append(page.Buckets, *b.Name)
 	}
-	if c.provider == core.R2 {
-		// R2 supports basic ListBuckets. Page its returned names using a lexical
+	if c.provider == core.S3Compatible && (page.NextToken != "" || isRemote) {
+		if page.NextToken != "" {
+			page.NextToken = remotePrefix + page.NextToken
+		}
+	} else if c.provider == core.R2 || c.provider == core.S3Compatible {
+		// Page a complete ListBuckets response using a lexical
 		// cursor, so inserts or deletes before that cursor don't shift the next page.
 		if page.NextToken != "" {
 			return BucketPage{}, core.NewError("error.cloudRequest")

@@ -38,7 +38,7 @@ func (c *Client) ReadRange(ctx context.Context, bucket, key string, id core.Obje
 	}
 	last := offset + length - 1
 	out, err := c.api.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key),
-		Range: aws.String(fmt.Sprintf("bytes=%d-%d", offset, last)), IfMatch: aws.String(id.ETag), VersionId: optional(id.VersionID)})
+		Range: aws.String(fmt.Sprintf("bytes=%d-%d", offset, last)), IfMatch: aws.String(id.ETag), VersionId: optional(id.VersionID)}, func(o *s3.Options) { o.HTTPClient = c.partHTTP })
 	if err != nil {
 		return nil, cloudError(err)
 	}

@@ -24,8 +24,15 @@ func TestSaveAccountAllProviders(t *testing.T) {
 	for _, provider := range []core.Provider{core.AWS, core.R2, core.OSS, core.TOS, core.S3Compatible} {
 		t.Run(string(provider), func(t *testing.T) {
 			input := core.Connection{Name: string(provider), Provider: provider}
-			if provider == core.R2 {
+			switch provider {
+			case core.R2:
 				input.Endpoint = "https://00000000000000000000000000000000.r2.cloudflarestorage.com"
+			case core.OSS:
+				input.Region = "cn-hangzhou"
+			case core.TOS:
+				input.Region = "cn-beijing"
+			case core.S3Compatible:
+				input.Endpoint = "https://storage.example.test"
 			}
 			keys := accountSecrets()
 			saved := w.SaveAccount(ctx, nil, input, &keys)
@@ -40,10 +47,8 @@ func TestSaveAccountAllProviders(t *testing.T) {
 			if err != nil || strings.Contains(string(wire), keys.SecretAccessKey) || strings.Contains(string(wire), keys.AccessKeyID) || strings.Contains(string(wire), keys.SessionToken) {
 				t.Fatal("public response leaked credentials")
 			}
-			if provider != core.AWS && provider != core.R2 {
-				if r := w.ListBuckets(ctx, *saved.Data, ""); r.Error == nil || r.Error.Code != "error.cloudProvider" {
-					t.Fatal("unimplemented provider reached the cloud path")
-				}
+			if _, err := w.client(ctx, *saved.Data); err != nil {
+				t.Fatalf("could not construct scoped adapter: %v", err)
 			}
 			if removed := w.ForgetCredentials(ctx, *saved.Data); removed.Error != nil || !removed.Data {
 				t.Fatal("explicit removal failed")
@@ -105,7 +110,7 @@ func TestSaveAccountPartialFailureRetryUsesSameID(t *testing.T) {
 	w := openWorkspaceAt(t.TempDir())
 	defer w.close()
 	ctx := t.Context()
-	first := core.Connection{Name: "retry", Provider: core.OSS}
+	first := core.Connection{Name: "retry", Provider: core.OSS, Region: "cn-hangzhou"}
 	keys := accountSecrets()
 	partial := w.SaveAccount(ctx, nil, first, &keys)
 	if partial.Data == nil || partial.Data.ID == "" || partial.Error == nil || partial.Error.Code != "error.keyringUnavailable" {
@@ -119,8 +124,8 @@ func TestSaveAccountPartialFailureRetryUsesSameID(t *testing.T) {
 	if r := w.SaveAccount(ctx, &committed, committed, &vault.Credentials{}); r.Data == nil || r.Error != nil {
 		t.Fatal("blank fields required the locked keyring")
 	}
-	if r := w.ListBuckets(ctx, committed, ""); r.Error == nil || r.Error.Code != "error.cloudProvider" {
-		t.Fatal("planned adapter attempted keyring access")
+	if r := w.ListBuckets(ctx, committed, ""); r.Error == nil || r.Error.Code != "error.keyringUnavailable" {
+		t.Fatal("read operation did not report locked credentials")
 	}
 
 	keyring.MockInit()
@@ -150,6 +155,9 @@ func TestSaveAccountRejectsInvalidInputBeforePersisting(t *testing.T) {
 	}{
 		{core.Connection{Name: "unknown", Provider: "new"}, keys, core.InvalidConnection},
 		{core.Connection{Name: "bad origin", Provider: core.AWS, Endpoint: "https://other.example"}, keys, core.InvalidConnection},
+		{core.Connection{Name: "oss region mismatch", Provider: core.OSS, Region: "cn-hangzhou", Endpoint: "https://oss-cn-beijing.aliyuncs.com"}, keys, core.InvalidConnection},
+		{core.Connection{Name: "tos foreign origin", Provider: core.TOS, Region: "cn-beijing", Endpoint: "https://foreign.example"}, keys, core.InvalidConnection},
+		{core.Connection{Name: "generic insecure", Provider: core.S3Compatible, Endpoint: "http://objects.example.test"}, keys, core.InvalidConnection},
 		{core.Connection{Name: "partial", Provider: core.TOS}, vault.Credentials{AccessKeyID: keys.AccessKeyID}, "error.invalidCredentials"},
 		{core.Connection{Name: "token only", Provider: core.OSS}, vault.Credentials{SessionToken: keys.SessionToken}, "error.invalidCredentials"},
 		{core.Connection{ID: "preexisting", Name: "untrusted id", Provider: core.AWS}, keys, core.InvalidConnection},

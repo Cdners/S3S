@@ -22,7 +22,7 @@ func wireClient(t *testing.T, provider core.Provider, serve http.HandlerFunc) *C
 	if provider == core.R2 {
 		region = "auto"
 	}
-	return newClient(provider, region, server.URL, Credentials{"fixture-id", "fixture-signing-material", "fixture-session"}, server.Client().Transport)
+	return newClient(provider, region, server.URL, Credentials{AccessKeyID: "fixture-id", SecretAccessKey: "fixture-signing-material", SessionToken: "fixture-session"}, server.Client().Transport)
 }
 
 func TestSignedBucketPages(t *testing.T) {

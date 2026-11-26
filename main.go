@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Cdners/S3S/internal/bandwidth"
 	"github.com/Cdners/S3S/internal/store"
 	"github.com/Cdners/S3S/internal/transfer"
 	"github.com/gofrs/flock"
@@ -50,8 +51,14 @@ func openWorkspaceAt(dir string) *Workspace {
 		lock.Unlock()
 		return &Workspace{}
 	}
+	options, err := db.TransferOptions(context.Background())
+	if err != nil {
+		db.Close()
+		lock.Unlock()
+		return &Workspace{}
+	}
 	life, stop := context.WithCancel(context.Background())
-	return &Workspace{life: life, stop: stop, store: db, engine: engine, lock: lock, active: make(map[string]worker)}
+	return &Workspace{life: life, stop: stop, store: db, engine: engine, limiter: bandwidth.New(options), lock: lock, active: make(map[string]worker)}
 }
 
 func main() {
