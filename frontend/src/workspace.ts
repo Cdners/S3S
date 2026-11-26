@@ -49,11 +49,22 @@ async function request<T>(method: string, args: unknown[], signal?: AbortSignal)
   if (result.data === null) throw new WorkspaceError('error.storage')
   return result.data
 }
-function call<T>(method: string, ...args: unknown[]): Promise<T> {
+export function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return request<T>(method, args)
 }
+let profileRevision = 0
 export async function loadProfiles() {
-  profiles.value = await call<Profile[]>('Connections')
+  const revision = profileRevision
+  const saved = await call<Profile[]>('Connections')
+  if (revision !== profileRevision) return
+  const existing = new Map(profiles.value.map(item => [item.id,item]))
+  // Preserve open bucket views and probe results across harmless navigation
+  // refreshes. A changed profile (including a credential write) gets a new identity.
+  profiles.value = saved.map(item => {
+    const previous = existing.get(item.id)
+    return previous && previous.provider === item.provider && previous.endpoint === item.endpoint &&
+      previous.name === item.name && previous.region === item.region ? previous : item
+  })
 }
 export async function loadTasks() {
   tasks.value = await call<Task[]>('Tasks')
@@ -65,24 +76,46 @@ export async function saveAccount(previous: Profile | null, changes: Profile, cr
   const error = result.error ? localizedError(result.error) : undefined
   if (!result.data) throw error ?? new WorkspaceError('error.storage')
   const saved = result.data
+  profileRevision++
   profiles.value = [...profiles.value.filter(item => item.id !== saved.id), saved].sort((a,b) => a.name.localeCompare(b.name))
   return { profile: saved, credentialError: error }
 }
 
-export const supportsCloud = (profile: Pick<Profile, 'provider'>) => profile.provider === 'aws' || profile.provider === 'r2'
+export interface Capabilities {
+  listBuckets:boolean; listObjects:boolean; metadata:boolean; download:boolean; upload:boolean; resumeParts:boolean
+}
+const capabilities = ref<Partial<Record<Provider,Capabilities>>>({})
+export async function loadCapabilities() {
+  capabilities.value = await call<Record<Provider,Capabilities>>('Capabilities')
+}
+export const capabilitiesFor = (provider: Provider) => capabilities.value[provider]
+export interface ProbeResult {operation:'listBuckets' | 'listObjects'; latencyMs:number}
+export const testConnection = (profile:Profile, bucket:string, signal:AbortSignal) =>
+  request<ProbeResult>('TestConnection', [profile,bucket], signal)
+export interface ObjectMetadata {size:number; etag:string; versionId?:string}
+export const objectMetadata = (profile:Profile, bucket:string, key:string, signal:AbortSignal) =>
+  request<ObjectMetadata>('ObjectMetadata', [profile,bucket,key], signal)
+export async function copyObjectKey(key:string) {
+  const { Clipboard } = await import('@wailsio/runtime')
+  await Clipboard.SetText(key)
+}
 export interface SecretInput {accessKeyId: string; secretAccessKey: string; sessionToken: string}
 export interface ObjectInfo {key: string; size: number; etag: string}
 interface BucketPage {buckets: string[]; nextToken: string}
 interface ObjectPage {objects: ObjectInfo[]; prefixes: string[]; nextToken: string}
-export const listBuckets = (profile: Profile, token: string) =>
-  call<BucketPage>('ListBuckets', profile, token)
-export const listObjects = (profile: Profile, bucket: string, prefix: string, token: string) =>
-  call<ObjectPage>('ListObjects', profile, bucket, prefix, token)
+export const listBuckets = (profile: Profile, token: string, signal: AbortSignal) =>
+  request<BucketPage>('ListBuckets', [profile, token], signal)
+export const listObjects = (profile: Profile, bucket: string, prefix: string, token: string, signal: AbortSignal) =>
+  request<ObjectPage>('ListObjects', [profile, bucket, prefix, token], signal)
 export const startDownload = (profile: Profile, bucket: string, key: string, title: string) =>
   call<string>('StartDownload', profile, bucket, key, title)
 export const pauseDownload = (id: string) => call<boolean>('PauseDownload', id)
 export const resumeDownload = (id: string) => call<boolean>('ResumeDownload', id)
-export const forgetCredentials = (profile: Profile) => call<boolean>('ForgetCredentials', profile)
+export async function forgetCredentials(profile: Profile) {
+  await call<boolean>('ForgetCredentials', profile)
+  profileRevision++
+  profiles.value = profiles.value.map(item => item.id === profile.id ? {...item} : item)
+}
 
 export const startUpload = (profile: Profile, bucket: string, key: string, title: string, signal: AbortSignal) =>
   request<string>('StartUpload', [profile, bucket, key, title], signal)

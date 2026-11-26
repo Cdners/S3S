@@ -5,7 +5,7 @@ import ErrorNotice from './ErrorNotice.vue'
 import { t } from './i18n'
 import { providerGuides } from './providerGuides'
 import {
-  forgetCredentials, providers, saveAccount, supportsCloud, workspaceError, WorkspaceError,
+  forgetCredentials, providers, saveAccount, capabilitiesFor, workspaceError, WorkspaceError,
   type Profile, type Provider, type SecretInput
 } from './workspace'
 
@@ -152,7 +152,7 @@ async function forget() {
             <p>{{ t(`account.guide.${provider}.origin`) }}</p>
             <p class="guide-example">{{ t('account.examplePair', guide) }}</p>
             <button v-if="canApplyExample" type="button" class="inline-button fill-example" data-fill-example @click="applyExample">{{ t('account.fillExample') }}</button>
-            <p v-if="!supportsCloud({provider})" data-provider-status>{{ t('account.planned') }}</p>
+            <p v-if="capabilitiesFor(provider)?.listObjects && !capabilitiesFor(provider)?.upload" data-provider-status>{{ t('account.readOnly') }}</p>
           </div>
           <div class="field"><label for="profile-region">{{ t('connections.region') }}</label>
             <input id="profile-region" v-model="region" :placeholder="guide.region" maxlength="128" spellcheck="false" aria-describedby="account-guide"></div>

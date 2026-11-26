@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  Activity, ArrowDownUp,
+  Activity, ArrowDownUp, Cable,
   FolderClosed, HardDrive, Info, Layers3, Pencil,
   Plus, Search, Server, Settings2, SlidersHorizontal, Waypoints
 } from '@lucide/vue'
@@ -9,16 +9,38 @@ import ProfileDialog from './ProfileDialog.vue'
 import AccountExamples from './AccountExamples.vue'
 import ObjectBrowser from './ObjectBrowser.vue'
 import ErrorNotice from './ErrorNotice.vue'
+import ProbeFeedback from './ProbeFeedback.vue'
+import { useConnectionProbe } from './connectionProbe'
 import CancelUploadDialog from './CancelUploadDialog.vue'
 import { taskActions, type TaskAction } from './transferActions'
 import LanguageSwitch from './LanguageSwitch.vue'
 import LanguageSettings from './LanguageSettings.vue'
+import BandwidthSettings from './BandwidthSettings.vue'
 import { locale, t, type MessageKey } from './i18n'
-import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, supportsCloud, pauseDownload, resumeDownload, pauseUpload, resumeUpload, cancelUpload, localizedError, type Task, type Profile, type Provider, type WorkspaceError } from './workspace'
+import { workspaceError, isDesktop, loadProfiles, loadTasks, profiles, providers, tasks, capabilitiesFor, loadCapabilities, pauseDownload, resumeDownload, pauseUpload, resumeUpload, cancelUpload, localizedError, type Task, type Profile, type Provider, type WorkspaceError } from './workspace'
 
 type Page = 'connections' | 'objects' | 'tasks' | 'settings'
 const nav = [{ id:'connections', icon:Waypoints }, { id:'objects', icon:FolderClosed }, { id:'tasks', icon:ArrowDownUp }] as const
 const page = ref<Page>('connections')
+const visitedBrowser = ref(false)
+const browserTarget = ref<{id:string}>()
+const { probe, run:testAccount, clear:clearProbe } = useConnectionProbe()
+const capabilityError = ref<WorkspaceError>()
+const capabilitiesPending = ref(isDesktop)
+watch(() => profiles.value.find(p => p.id === probe.value?.profile.id), current => {
+  if (probe.value && current !== probe.value.profile) clearProbe()
+})
+async function readCapabilities() {
+  capabilitiesPending.value = true
+  capabilityError.value = undefined
+  try { await loadCapabilities() }
+  catch (error) { capabilityError.value = workspaceError(error) }
+  finally { capabilitiesPending.value = false }
+}
+function connect(profile: Profile) {
+  browserTarget.value = {id:profile.id}
+  navigate('objects')
+}
 const query = ref('')
 const filter = ref<Provider | ''>('')
 const initialProvider = ref<Provider>('aws')
@@ -86,11 +108,14 @@ async function taskAction(task:Task, action:TaskAction, confirmed = false) {
 let poll: ReturnType<typeof setInterval>
 function navigate(p: Page) {
   page.value = p
+  if (p === 'objects') visitedBrowser.value = true
+  if (p !== 'connections') clearProbe()
   if (isDesktop && p !== 'settings') void refresh(dataPage.value)
 }
 onMounted(() => {
   if (!isDesktop) return
   void refresh('connections')
+  void readCapabilities()
   poll = setInterval(() => {
     if (page.value === 'tasks' && !failures.value.tasks && !pendingTask.value && !document.hidden) void refresh('tasks')
   }, 1800)
@@ -128,33 +153,42 @@ function edit(profile?: Profile, provider: Provider = 'aws') {
         <Info /><span>{{ t(failure?.key ?? 'error.preview', failure?.detail?.params) }}</span>
         <button v-if="failure" class="inline-button" @click="refresh(dataPage)">{{ t('action.retry') }}</button>
       </div>
-      <template v-if="page === 'connections'">
+      <div v-if="capabilityError && page !== 'settings' && page !== 'tasks'" class="notice" role="alert">
+        <span>{{ t('connections.capabilityError') }}</span><button class="inline-button" @click="readCapabilities">{{ t('action.retry') }}</button>
+      </div>
+      <section v-if="page === 'connections'" class="accounts-region" :class="{populated:profiles.length}">
         <AccountExamples :can-create="isDesktop && !failure && !loading.connections" @use="edit(undefined, $event)"/>
         <section class="panel">
-          <header class="panel-head"><div class="panel-label"><Server /><h2>{{ t('connections.list') }}</h2></div>
-            <span v-if="isDesktop && !failure && !loading.connections" class="count">{{ t('connections.count', {count:profiles.length}) }}</span>
-          </header>
+          <header class="panel-head account-toolbar"><div class="panel-label"><Server /><h2>{{ t('connections.list') }}</h2></div>
           <div v-if="profiles.length" class="tools"><label class="search"><Search /><input v-model="query" type="search" :placeholder="t('connections.search')" :aria-label="t('connections.search')"></label>
             <label class="filter"><SlidersHorizontal /><select v-model="filter" :aria-label="t('connections.provider')"><option value="">{{ t('connections.all') }}</option>
               <option v-for="p in providers" :key="p" :value="p">{{ t(`provider.${p}`) }}</option></select></label>
-          </div>
-          <div v-if="visible.length && !failure" class="table-scroll"><table><thead><tr>
-            <th>{{ t('connections.name') }}</th><th>{{ t('connections.provider') }}</th><th>{{ t('connections.region') }}</th><th>{{ t('connections.endpoint') }}</th><th><span class="sr-only">{{ t('connections.actions') }}</span></th>
-          </tr></thead><tbody v-if="!failure"><tr v-for="p in visible" :key="p.id">
-            <td class="strong">{{ p.name }}</td><td>{{ t(`provider.${p.provider}`) }}<small v-if="!supportsCloud(p)" class="account-capability">{{ t('connections.localOnly') }}</small></td><td>{{ p.region || t('connections.default') }}</td><td>{{ p.endpoint || t('connections.default') }}</td>
-            <td><button class="inline-button account-edit" :disabled="loading.connections" :aria-label="t('connections.actionEdit', {name:p.name})" @click="edit(p)"><Pencil />{{ t('connections.edit') }}</button></td>
-          </tr></tbody></table></div>
-          <div v-if="failure || loading.connections || !visible.length" class="empty">
+          </div></header>
+          <div v-if="visible.length && !failure" class="accounts-wrap"><table class="accounts-table"><thead><tr>
+            <th>{{ t('connections.name') }}</th><th>{{ t('connections.storageService') }}</th><th>{{ t('connections.actions') }}</th>
+          </tr></thead><tbody>
+            <template v-for="p in visible" :key="p.id"><tr class="account-row">
+              <td class="account-name">{{ p.name }}</td>
+              <td class="service-info"><span>{{ t(`provider.${p.provider}`) }}</span><span v-if="p.region" class="service-region">{{ p.region }}</span>
+                <small v-if="p.endpoint" dir="auto" :title="p.endpoint">{{ p.endpoint }}</small></td>
+              <td class="account-action-cell"><div class="account-actions">
+                <button class="primary compact-button" data-connect :aria-label="t('connections.connectNamed', {name:p.name})"
+                  :disabled="!capabilitiesFor(p.provider)?.listObjects" @click="connect(p)"><Cable/>{{ t('connections.connect') }}</button>
+                <button class="secondary compact-button" data-test-account :aria-label="t('connections.testNamed', {name:p.name})"
+                  :disabled="!capabilitiesFor(p.provider)?.listBuckets || (probe?.profile.id === p.id && probe.status === 'pending')" @click="testAccount(p)">{{ t('connections.test') }}</button>
+                <button class="icon-button" data-edit-account :aria-label="t('connections.actionEdit', {name:p.name})" :title="t('connections.edit')" @click="edit(p)"><Pencil/></button>
+              </div></td></tr>
+              <tr v-if="probe?.profile.id === p.id" class="account-test-row"><td colspan="3"><ProbeFeedback :test="probe"/></td></tr>
+            </template>
+          </tbody></table></div>
+          <div v-if="failure || !visible.length" class="empty">
             <div class="empty-icon"><Waypoints /></div>
             <template v-if="loading.connections"><h3>{{ t('common.loading') }}</h3></template>
             <template v-else-if="failure || !isDesktop"><h3>{{ t('connections.list') }}</h3><p>{{ t('connections.emptyText') }}</p></template>
             <template v-else><h3>{{ t(profiles.length ? 'connections.noMatch' : 'connections.empty') }}</h3><p>{{ t(profiles.length ? 'connections.noMatchText' : 'connections.emptyText') }}</p></template>
           </div>
         </section>
-      </template>
-      <template v-else-if="page === 'objects'">
-        <ObjectBrowser :unavailable="!!failure" @manage="navigate('connections')" @tasks="navigate('tasks')" @credentials="edit($event)"/>
-      </template>
+      </section>
       <template v-else-if="page === 'tasks'">
         <section class="panel">
           <header class="panel-head"><div class="panel-label"><Activity /><h2>{{ t('tasks.title') }}</h2></div></header>
@@ -174,9 +208,12 @@ function edit(profile?: Profile, provider: Provider = 'aws') {
             <h3>{{ t(!isDesktop || failure ? 'tasks.title' : fetchedTasks ? 'tasks.empty' : 'common.loading') }}</h3><p>{{ t('tasks.emptyText') }}</p></div>
         </section>
       </template>
-      <template v-else>
+      <template v-else-if="page === 'settings'">
         <LanguageSettings />
+        <BandwidthSettings v-if="isDesktop" class="bandwidth-panel"/>
       </template>
+      <ObjectBrowser v-if="visitedBrowser" v-show="page === 'objects'" :target="browserTarget" :capabilities-pending="capabilitiesPending" :unavailable="!!failures.connections"
+        @manage="navigate('connections')" @tasks="navigate('tasks')" @credentials="edit($event)"/>
     </main>
     <CancelUploadDialog v-if="cancelTarget" :task="cancelTarget"
       :connection="profiles.find(item => item.id === cancelTarget?.connectionId)?.name ?? cancelTarget.connectionId"

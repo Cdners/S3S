@@ -35,7 +35,8 @@ const group = useId()
 .language-choice {
   position: relative;
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   font-size: 14px;
   font-weight: 550;
 }
@@ -71,11 +72,14 @@ input:focus-visible + span { outline: 2px solid #37aba9; outline-offset: 1px; }
   --text: #d3e1e3;
   --selected: #345149;
   --active-text: #d7faed;
-  margin: 11px 4px 0;
+  margin: 11px 0 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 2px;
 }
 .compact .language-choice { font-size: 12px; }
-.compact .language-choice span { padding: 5px 9px; }
+.compact .language-choice span { padding: 5px 4px; }
+@media (max-width:860px) { .compact { width:130px; margin:0; } }
 @media (forced-colors: active) {
   input:checked + span { border-color: Highlight; }
 }

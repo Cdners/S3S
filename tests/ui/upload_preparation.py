@@ -1,6 +1,8 @@
 """Verify cancellation at the production Vue-to-Wails bridge, using an isolated HTTP fixture."""
 from playwright.sync_api import expect
 
+from capabilities import CAPABILITIES
+
 
 def verify_upload_preparation(page, address, english):
     # The fixture controls only the local Wails transport. Keep the original
@@ -30,6 +32,8 @@ def verify_upload_preparation(page, address, english):
             return
         results = {
             'Connections': [profile],
+            'Capabilities': CAPABILITIES,
+            'ListBuckets': {'buckets': [], 'nextToken': ''},
             'ListObjects': {'objects': [], 'prefixes': [], 'nextToken': ''},
             'Tasks': [],
         }
@@ -51,7 +55,7 @@ def verify_upload_preparation(page, address, english):
         page.get_by_role('button', name=english['upload.stopPreparation']).click()
     assert len(pending) == 1 and canceled == [pending[0][1]]
     expect(page.get_by_role('dialog')).to_have_count(0)
-    expect(page.get_by_role('status')).to_contain_text(english['upload.stopRequested'])
+    expect(page.locator('.remote-list').get_by_role('status')).to_contain_text(english['upload.stopRequested'])
 
     # Cancellation can race a successful enqueue. A late reply must not turn
     # the notice into a success, close a new dialog or abort the durable task.
@@ -61,7 +65,7 @@ def verify_upload_preparation(page, address, english):
         pending[0][0].fulfill(json={'data': 'already-queued-task', 'error': None})
     expect(page.get_by_role('dialog')).to_be_visible()
     page.get_by_role('button', name=english['action.cancel'], exact=True).click()
-    expect(page.get_by_role('status')).to_contain_text(english['upload.stopRequested'])
+    expect(page.locator('.remote-list').get_by_role('status')).to_contain_text(english['upload.stopRequested'])
     page.locator('[data-page="tasks"]').click()
     expect(page.get_by_role('heading', level=1)).to_have_text(english['nav.tasks'])
     assert 'CancelUpload' not in methods and not errors

@@ -97,14 +97,14 @@ def verify(binary, locales, profile):
         lookup(en['connections.add'], 'heading')
         subprocess.run(['xdotool', 'type', '--clearmodifiers', name], check=True)
         press(en['connections.save'])
-        lookup(name, 'table cell')
+        lookup(en['connections.actionEdit'].format(name=name), 'button')
         visit(en, 'objects')
         lookup(en['objects.empty'], 'heading')
         visit(en, 'tasks')
         lookup(en['tasks.empty'], 'heading')
     with desktop(binary, profile):
         lookup(en['nav.connections'], 'heading')
-        lookup(name, 'table cell')
+        lookup(en['connections.actionEdit'].format(name=name), 'button')
     print('PASS Linux desktop navigation, live language switch, profile save and persistence after restart')
 
 

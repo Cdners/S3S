@@ -9,6 +9,8 @@ from threading import Thread
 from playwright.sync_api import expect, sync_playwright
 
 from account_form import verify_account_form
+from bandwidth import verify_bandwidth
+from connected_workspace import verify_connected_workspace
 from upload_preparation import verify_upload_preparation
 
 
@@ -100,13 +102,15 @@ def main():
                 address = f'http://127.0.0.1:{server.server_port}'
                 verify(browser.new_page(viewport={'width': 1200, 'height': 800}), address)
                 verify_account_form(browser.new_page(viewport={'width': 760, 'height': 560}), address, messages('zh-CN'))
+                verify_bandwidth(browser.new_page(viewport={'width': 760, 'height': 560}), address, messages('en-US'), messages('zh-CN'))
+                verify_connected_workspace(browser.new_page(), address, [messages("zh-CN"), messages("en-US")])
                 verify_upload_preparation(browser.new_page(), address, messages('en-US'))
             finally:
                 browser.close()
         finally:
             server.shutdown()
     print('PASS five account guides, keyboard language switch with context, language import, fallback, '
-          'persistence, account keyring retry, preview navigation and upload preparation cancellation')
+          'persistence, account keyring retry, account actions, layout, scoped probes, stale replies, metadata and upload cancellation')
 
 
 if __name__ == '__main__':

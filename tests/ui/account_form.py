@@ -3,6 +3,8 @@ from secrets import token_hex
 
 from playwright.sync_api import expect
 
+from capabilities import CAPABILITIES
+
 
 def verify_account_form(page, address, catalog):
     page.add_init_script("window._wails = { environment: { OS: 'linux' } }")
@@ -14,6 +16,9 @@ def verify_account_form(page, address, catalog):
         nonlocal committed, attempts
         args = route.request.post_data_json['args']
         method = args['methodName'].split('.')[-1]
+        if method == 'Capabilities':
+            route.fulfill(json={'data': CAPABILITIES, 'error': None})
+            return
         if method == 'Connections':
             route.fulfill(json={'data': [committed] if committed else [], 'error': None})
             return
